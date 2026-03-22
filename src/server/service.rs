@@ -1,6 +1,8 @@
 use crate::integration::OpenCodeBridge;
 use crate::provider::ProviderRuntime;
-use crate::server::{ServerContinueRequest, ServerRequest, ServerResponse};
+use crate::server::{
+    ServerContinueRequest, ServerMetadata, ServerModel, ServerRequest, ServerResponse,
+};
 
 pub struct OpenClaudeService<R: ProviderRuntime> {
     bridge: OpenCodeBridge<R>,
@@ -11,14 +13,35 @@ impl<R: ProviderRuntime> OpenClaudeService<R> {
         Self { bridge }
     }
 
+    pub fn describe(&self) -> ServerResponse {
+        ServerResponse {
+            metadata: Some(ServerMetadata {
+                provider_id: self.bridge.provider_info().id.clone(),
+                provider_name: self.bridge.provider_info().name.clone(),
+                models: self
+                    .bridge
+                    .models()
+                    .into_iter()
+                    .map(ServerModel::from)
+                    .collect(),
+            }),
+            step: crate::integration::AdapterStep {
+                events: Vec::new(),
+                state: crate::integration::AdapterSessionState::Ready,
+            },
+        }
+    }
+
     pub fn start(&mut self, request: ServerRequest) -> anyhow::Result<ServerResponse> {
         Ok(ServerResponse {
+            metadata: None,
             step: self.bridge.start(request.conversation)?,
         })
     }
 
     pub fn resume(&mut self, request: ServerContinueRequest) -> anyhow::Result<ServerResponse> {
         Ok(ServerResponse {
+            metadata: None,
             step: self.bridge.submit_tool_result(request.tool_result)?,
         })
     }
@@ -151,5 +174,25 @@ mod tests {
 
         assert_eq!(second.step.state, AdapterSessionState::Finished);
         assert!(*resumed.lock().unwrap());
+    }
+
+    #[test]
+    fn service_describe_reports_provider_and_models() {
+        let model = ProviderModel::claude("sonnet", "Claude Sonnet");
+        let runtime = MockRuntime {
+            model: model.clone(),
+            continuation: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            resumed: std::sync::Arc::new(std::sync::Mutex::new(false)),
+        };
+        let bridge = OpenCodeBridge::new(runtime, vec![model]);
+        let service = OpenClaudeService::new(bridge);
+
+        let response = service.describe();
+        let metadata = response.metadata.unwrap();
+
+        assert_eq!(metadata.provider_id, "mock");
+        assert_eq!(metadata.models.len(), 1);
+        assert_eq!(metadata.models[0].id, "sonnet");
+        assert_eq!(response.step.state, AdapterSessionState::Ready);
     }
 }

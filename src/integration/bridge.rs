@@ -1,6 +1,7 @@
 use crate::integration::{AdapterStep, OpenCodeAdapter};
 use crate::provider::{
-    MessageRole, ProviderMessage, ProviderModel, ProviderRequest, ProviderRuntime, ToolResult,
+    MessageRole, ProviderInfo, ProviderMessage, ProviderModel, ProviderRequest, ProviderRuntime,
+    ToolResult,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -37,11 +38,13 @@ pub struct BridgeToolResult {
 
 pub struct OpenCodeBridge<R: ProviderRuntime> {
     adapter: OpenCodeAdapter<R>,
+    provider: ProviderInfo,
     models: BTreeMap<String, ProviderModel>,
 }
 
 impl<R: ProviderRuntime> OpenCodeBridge<R> {
     pub fn new(runtime: R, models: impl IntoIterator<Item = ProviderModel>) -> Self {
+        let provider = runtime.info();
         let models = models
             .into_iter()
             .map(|model| (model.id.clone(), model))
@@ -49,8 +52,17 @@ impl<R: ProviderRuntime> OpenCodeBridge<R> {
 
         Self {
             adapter: OpenCodeAdapter::new(runtime),
+            provider,
             models,
         }
+    }
+
+    pub fn provider_info(&self) -> &ProviderInfo {
+        &self.provider
+    }
+
+    pub fn models(&self) -> Vec<ProviderModel> {
+        self.models.values().cloned().collect()
     }
 
     pub fn start(&mut self, request: BridgeRequest) -> anyhow::Result<AdapterStep> {

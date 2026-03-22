@@ -1,5 +1,8 @@
 pub mod protocol;
 pub mod service;
 
-pub use protocol::{ServerContinueRequest, ServerRequest, ServerResponse};
+pub use protocol::{
+    ServerCommand, ServerContinueRequest, ServerEnvelope, ServerMetadata, ServerModel,
+    ServerRequest, ServerResponse,
+};
 pub use service::OpenClaudeService;
