@@ -17,17 +17,14 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         .init();
 
     if let Some(Command::Init { project_root }) = &cli.command {
-        let results = refresh_reference(project_root)?;
-        let downloaded = results
-            .iter()
-            .filter(|item| {
-                matches!(
-                    item.status,
-                    crate::reference::ReferenceStatus::Downloaded { .. }
-                )
-            })
-            .count();
-        info!(project_root = %project_root.display(), downloaded, "refreshed opencode reference");
+        let result = refresh_reference(project_root)?;
+        info!(
+            project_root = %project_root.display(),
+            reference_path = %result.path.display(),
+            repo_url = %result.repo_url,
+            status = ?result.status,
+            "refreshed opencode reference checkout"
+        );
         return Ok(());
     }
 
