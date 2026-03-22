@@ -33,6 +33,7 @@ pub enum MessageRole {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolResult {
     pub call_id: String,
+    pub tool_name: Option<String>,
     pub output: Value,
 }
 
@@ -43,7 +44,7 @@ pub trait ProviderRuntime {
         &self,
         request: ProviderRequest,
     ) -> anyhow::Result<std::vec::IntoIter<anyhow::Result<StreamPart>>>;
-    fn submit_tool_result(&self, _result: ToolResult) -> anyhow::Result<()> {
-        Ok(())
+    fn submit_tool_result(&self, _result: ToolResult) -> anyhow::Result<Option<ProviderRequest>> {
+        Ok(None)
     }
 }
