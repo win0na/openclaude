@@ -5,9 +5,17 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ServerCommand {
-    Describe,
-    Start { request: ServerRequest },
-    Resume { request: ServerContinueRequest },
+    Describe {
+        request_id: String,
+    },
+    Start {
+        request_id: String,
+        request: ServerRequest,
+    },
+    Resume {
+        request_id: String,
+        request: ServerContinueRequest,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -45,8 +53,14 @@ pub struct ServerModel {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ServerEnvelope {
-    Success { response: ServerResponse },
-    Error { message: String },
+    Success {
+        request_id: String,
+        response: ServerResponse,
+    },
+    Error {
+        request_id: Option<String>,
+        message: String,
+    },
 }
 
 impl From<ProviderModel> for ServerModel {

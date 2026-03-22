@@ -18,22 +18,38 @@ pub fn serve_stdio<R: ProviderRuntime, In: Read, Out: Write>(
         }
 
         let envelope = match serde_json::from_str::<ServerCommand>(&line) {
-            Ok(ServerCommand::Describe) => ServerEnvelope::Success {
+            Ok(ServerCommand::Describe { request_id }) => ServerEnvelope::Success {
+                request_id,
                 response: service.describe(),
             },
-            Ok(ServerCommand::Start { request }) => match service.start(request) {
-                Ok(response) => ServerEnvelope::Success { response },
+            Ok(ServerCommand::Start {
+                request_id,
+                request,
+            }) => match service.start(request) {
+                Ok(response) => ServerEnvelope::Success {
+                    request_id,
+                    response,
+                },
                 Err(err) => ServerEnvelope::Error {
+                    request_id: Some(request_id),
                     message: err.to_string(),
                 },
             },
-            Ok(ServerCommand::Resume { request }) => match service.resume(request) {
-                Ok(response) => ServerEnvelope::Success { response },
+            Ok(ServerCommand::Resume {
+                request_id,
+                request,
+            }) => match service.resume(request) {
+                Ok(response) => ServerEnvelope::Success {
+                    request_id,
+                    response,
+                },
                 Err(err) => ServerEnvelope::Error {
+                    request_id: Some(request_id),
                     message: err.to_string(),
                 },
             },
             Err(err) => ServerEnvelope::Error {
+                request_id: None,
                 message: format!("invalid command: {err}"),
             },
         };
@@ -97,8 +113,12 @@ mod tests {
         let mut service = OpenClaudeService::new(bridge);
 
         let input = [
-            serde_json::to_string(&ServerCommand::Describe).unwrap(),
+            serde_json::to_string(&ServerCommand::Describe {
+                request_id: "req-1".into(),
+            })
+            .unwrap(),
             serde_json::to_string(&ServerCommand::Start {
+                request_id: "req-2".into(),
                 request: crate::server::ServerRequest {
                     conversation: BridgeRequest {
                         model_id: "sonnet".into(),
@@ -121,5 +141,7 @@ mod tests {
 
         assert!(responses.contains("\"provider_id\":\"mock\""));
         assert!(responses.contains("\"kind\":\"success\""));
+        assert!(responses.contains("\"request_id\":\"req-1\""));
+        assert!(responses.contains("\"request_id\":\"req-2\""));
     }
 }
