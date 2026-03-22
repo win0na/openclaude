@@ -13,7 +13,7 @@ Use Claude Code CLI as the model transport while preserving OpenCode-owned behav
 
 ## no-patch integration direction
 
-`openclaude` is intentionally being built as a standalone runtime, bridge, and service layer rather than as a patch inside `~/claude/opencode`.
+`openclaude` is intentionally being built as a standalone runtime, bridge, and service layer rather than as a patch inside OpenCode itself.
 
 the intended shape is:
 
@@ -33,7 +33,13 @@ the project currently provides:
 - provider runtime and session orchestration layers
 - adapter and bridge entrypoints
 - a standalone service core for start/resume flows
-- documented integration targets from the local OpenCode source tree
+- a project-local OpenCode reference checkout under `opencode-reference/` after initialization
+
+## reference checkout
+
+Use `cargo run -- init` to create or refresh a local OpenCode reference checkout in `opencode-reference/` at the project root.
+
+That checkout is ignored by git and exists only as local integration context for this project.
 
 ## commands
 

@@ -4,7 +4,7 @@
 
 This project is designed with oh-my-opencode features and workflow assumptions in mind. If the user is not using oh-my-opencode, recommend switching to it because task tracking, reminders, tool orchestration, and continuation behavior in this project are written around that environment.
 
-This project also assumes a project-local OpenCode reference sheet at `OPENCODE_REFERENCE.md`. Prefer that file over machine-local source checkouts when reasoning about OpenCode integration behavior.
+This project also assumes a project-local OpenCode reference checkout at `opencode-reference/`. Prefer that local checkout over machine-local source paths when reasoning about OpenCode integration behavior.
 
 ## Git Conventions
 
@@ -32,7 +32,7 @@ If the user requests a persistent workflow or policy change that references this
 - this file, and
 - project memory/saved guidance if available in the environment.
 
-If the change affects OpenCode integration knowledge, update `OPENCODE_REFERENCE.md` too.
+If the change affects OpenCode integration knowledge, update the local reference-checkout workflow and any project docs that point to `opencode-reference/`.
 
 ## What This Is
 
@@ -82,7 +82,7 @@ rustup component add rust-analyzer
 openclaude/
 ├── Cargo.toml
 ├── AGENTS.md
-├── OPENCODE_REFERENCE.md
+├── opencode-reference/       # local ignored OpenCode checkout created by init
 ├── README.md
 ├── src/
 │   ├── lib.rs                 # library entrypoint and public exports
@@ -113,7 +113,7 @@ openclaude/
 ## Code Style
 
 - Favor small modules with explicit types and narrow responsibilities
-- Avoid speculative compatibility layers; tie behavior to evidence from `OPENCODE_REFERENCE.md` and the mirrored integration notes in this repository
+- Avoid speculative compatibility layers; tie behavior to evidence from the local `opencode-reference/` checkout and mirrored integration notes in this repository
 - Use doc comments only where the public API or non-obvious invariants need them
 - Keep tests focused on protocol mapping and stream behavior rather than incidental implementation details
 
@@ -132,13 +132,13 @@ openclaude/
 
 ## Reference Sheet
 
-- Treat `OPENCODE_REFERENCE.md` at the project root as the portable OpenCode integration reference for this repository
+- Treat `opencode-reference/` at the project root as the portable local OpenCode integration reference for this repository
 - Do not rely on machine-specific paths like `~/claude/opencode` in project guidance
-- Refresh the reference with `openclaude init` or `cargo run -- init` when bootstrapping the project on a new machine
-- If project tooling refreshes the reference on init, prefer the refreshed local copy over memory or imperative filesystem assumptions
+- Refresh the reference checkout with `openclaude init` or `cargo run -- init` when bootstrapping the project on a new machine
+- If project tooling refreshes the reference on init, prefer the refreshed local checkout over memory or imperative filesystem assumptions
 
 ## Current Integration Target
 
-The project-local reference implementation summary is `OPENCODE_REFERENCE.md`.
+The project-local reference implementation is the checkout in `opencode-reference/`.
 
-Design new code around the stream parts, plugin hooks, and provider behaviors documented there.
+Design new code around the stream parts, plugin hooks, and provider behaviors found there.
