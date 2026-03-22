@@ -3,7 +3,7 @@ use crate::cli::Cli;
 use crate::config::RuntimeConfig;
 use crate::integration::OpenCodeBridge;
 use crate::provider::default_models;
-use crate::server::OpenClaudeService;
+use crate::server::{OpenClaudeService, serve_stdio};
 use tracing::info;
 
 pub fn run(cli: Cli) -> anyhow::Result<()> {
@@ -19,7 +19,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     let models = default_models();
     let runtime = ClaudeCliRuntime::new(config.claude_bin.clone(), models.clone());
     let bridge = OpenCodeBridge::new(runtime, models);
-    let _service = OpenClaudeService::new(bridge);
+    let mut service = OpenClaudeService::new(bridge);
 
     info!(
         model = %config.default_model,
@@ -28,5 +28,6 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         integration_mode = "standalone_bridge",
         "openclaude initialized"
     );
-    Ok(())
+
+    serve_stdio(&mut service, std::io::stdin(), std::io::stdout())
 }
