@@ -1,9 +1,12 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Parser)]
 #[command(name = "openclaude")]
 pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
     #[arg(long, env = "OPENCLAUDE_PROVIDER_ID", default_value = "openclaude")]
     pub provider_id: String,
 
@@ -15,4 +18,12 @@ pub struct Cli {
 
     #[arg(long, env = "OPENCLAUDE_WORKDIR", default_value = "/tmp/openclaude")]
     pub workdir: PathBuf,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum Command {
+    Init {
+        #[arg(long, default_value = ".")]
+        project_root: PathBuf,
+    },
 }

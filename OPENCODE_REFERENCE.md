@@ -60,3 +60,16 @@ This file is the project-local reference sheet for the OpenCode surfaces that `o
 
 - treat this file as the portable replacement for machine-local `~/claude/opencode` references in project docs
 - use `openclaude init` to refresh this file when project tooling supports it
+
+## refresh metadata
+
+This file can be refreshed with `openclaude init`. The latest refresh attempted to download these upstream OpenCode references:
+
+- `https://raw.githubusercontent.com/sst/opencode/dev/packages/plugin/src/index.ts` — downloaded 6662 bytes
+- `https://raw.githubusercontent.com/sst/opencode/dev/packages/opencode/src/plugin/index.ts` — downloaded 7952 bytes
+- `https://raw.githubusercontent.com/sst/opencode/dev/packages/opencode/src/provider/provider.ts` — downloaded 53900 bytes
+- `https://raw.githubusercontent.com/sst/opencode/dev/packages/opencode/src/session/llm.ts` — downloaded 10212 bytes
+- `https://raw.githubusercontent.com/sst/opencode/dev/packages/opencode/src/session/prompt.ts` — downloaded 68152 bytes
+- `https://raw.githubusercontent.com/sst/opencode/dev/packages/opencode/src/session/message-v2.ts` — downloaded 29873 bytes
+
+If downloads fail, the embedded project reference above remains the baseline fallback.
