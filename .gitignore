@@ -1,2 +1,16 @@
 /target/
+
+# local reference checkout
 /opencode-reference/
+
+# editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# local env/config
+.env
+.env.*
+.direnv/
