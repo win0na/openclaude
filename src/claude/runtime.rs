@@ -1,5 +1,6 @@
 use crate::claude::cli::ClaudeCli;
 use crate::claude::prompt::build_claude_prompt;
+use crate::claude::result::format_tool_result;
 use crate::claude::stream::ClaudeChunk;
 use crate::claude::translate::ClaudeTranslator;
 use crate::provider::{
@@ -88,8 +89,7 @@ impl ClaudeCliRuntime {
         });
         messages.push(ProviderMessage {
             role: MessageRole::Tool,
-            content: serde_json::to_string_pretty(&result.output)
-                .context("failed to serialize tool result output")?,
+            content: format_tool_result(&result)?,
         });
 
         Ok(ProviderRequest {
