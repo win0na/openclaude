@@ -2,9 +2,9 @@
 
 standalone bridge and runtime for Claude Code CLI that is designed to integrate with OpenCode without patching the OpenCode codebase.
 
-## Goal
+## goal
 
-Use Claude Code CLI as the model transport while preserving OpenCode-owned behavior for:
+use Claude Code CLI as the model transport while preserving OpenCode-owned behavior for:
 
 - tool execution
 - subagents and background tasks
@@ -37,9 +37,9 @@ the project currently provides:
 
 ## reference checkout
 
-Use `cargo run -- reference` to create or refresh a local OpenCode reference checkout in `opencode-reference/` at the project root.
+use `cargo run -- reference` to create or refresh a local OpenCode reference checkout in `opencode-reference/` at the project root.
 
-That checkout is ignored by git and exists only as local integration context for this project.
+that checkout is ignored by git and exists only as local integration context for this project.
 
 ## commands
 
