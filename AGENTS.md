@@ -4,6 +4,8 @@
 
 This project is designed with oh-my-opencode features and workflow assumptions in mind. If the user is not using oh-my-opencode, recommend switching to it because task tracking, reminders, tool orchestration, and continuation behavior in this project are written around that environment.
 
+This project also assumes a project-local OpenCode reference sheet at `OPENCODE_REFERENCE.md`. Prefer that file over machine-local source checkouts when reasoning about OpenCode integration behavior.
+
 ## Git Conventions
 
 When committing is explicitly requested, use format: `topic: short description`. For large changes, use a multi-line message where the first line is the short label and the body describes changes in detail, utilizing a bulleted list.
@@ -29,6 +31,8 @@ Apply to every interaction:
 If the user requests a persistent workflow or policy change that references this `AGENTS.md`, update both:
 - this file, and
 - project memory/saved guidance if available in the environment.
+
+If the change affects OpenCode integration knowledge, update `OPENCODE_REFERENCE.md` too.
 
 ## What This Is
 
@@ -77,6 +81,7 @@ rustup component add rust-analyzer
 openclaude/
 ├── Cargo.toml
 ├── AGENTS.md
+├── OPENCODE_REFERENCE.md
 ├── README.md
 ├── src/
 │   ├── lib.rs                 # library entrypoint and public exports
@@ -93,7 +98,7 @@ openclaude/
 │   │   ├── cli.rs             # process spawning and argument building
 │   │   └── stream.rs          # Claude stream-json parsing
 │   └── integration/
-│       └── opencode.rs        # documented integration targets from local OpenCode source
+│       └── opencode.rs        # documented integration targets mirrored into the local reference sheet
 ```
 
 ## Architecture Expectations
@@ -107,7 +112,7 @@ openclaude/
 ## Code Style
 
 - Favor small modules with explicit types and narrow responsibilities
-- Avoid speculative compatibility layers; tie behavior to evidence from the local `~/claude/opencode` source tree
+- Avoid speculative compatibility layers; tie behavior to evidence from `OPENCODE_REFERENCE.md` and the mirrored integration notes in this repository
 - Use doc comments only where the public API or non-obvious invariants need them
 - Keep tests focused on protocol mapping and stream behavior rather than incidental implementation details
 
@@ -124,12 +129,14 @@ openclaude/
 - Mark verification todos `completed` immediately after the verification command succeeds and before moving on to the next batch of work
 - Avoid carrying one generic verification todo across multiple logical changes; prefer one verification todo per change batch and close it right away
 
+## Reference Sheet
+
+- Treat `OPENCODE_REFERENCE.md` at the project root as the portable OpenCode integration reference for this repository
+- Do not rely on machine-specific paths like `~/claude/opencode` in project guidance
+- If project tooling refreshes the reference on init, prefer the refreshed local copy over memory or imperative filesystem assumptions
+
 ## Current Integration Target
 
-The local reference implementation is `~/claude/opencode`, especially:
+The project-local reference implementation summary is `OPENCODE_REFERENCE.md`.
 
-- `packages/opencode/src/provider/provider.ts`
-- `packages/opencode/src/session/processor.ts`
-- `packages/opencode/src/session/message-v2.ts`
-
-Design new code around the stream parts and provider behaviors these files actually consume.
+Design new code around the stream parts, plugin hooks, and provider behaviors documented there.
