@@ -1,7 +1,9 @@
 use crate::claude::ClaudeCliRuntime;
 use crate::cli::Cli;
 use crate::config::RuntimeConfig;
-use crate::provider::{ProviderModel, ProviderRuntime};
+use crate::integration::OpenCodeBridge;
+use crate::provider::ProviderModel;
+use crate::server::OpenClaudeService;
 use tracing::info;
 
 pub fn run(cli: Cli) -> anyhow::Result<()> {
@@ -14,19 +16,20 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         .init();
 
     let config = RuntimeConfig::from_cli(cli);
-    let runtime = ClaudeCliRuntime::new(
-        config.claude_bin.clone(),
-        vec![
-            ProviderModel::claude("haiku", "Claude Haiku"),
-            ProviderModel::claude("sonnet", "Claude Sonnet"),
-            ProviderModel::claude("opus", "Claude Opus"),
-        ],
-    );
+    let models = vec![
+        ProviderModel::claude("haiku", "Claude Haiku"),
+        ProviderModel::claude("sonnet", "Claude Sonnet"),
+        ProviderModel::claude("opus", "Claude Opus"),
+    ];
+    let runtime = ClaudeCliRuntime::new(config.claude_bin.clone(), models.clone());
+    let bridge = OpenCodeBridge::new(runtime, models);
+    let _service = OpenClaudeService::new(bridge);
 
     info!(
         model = %config.default_model,
         provider_id = %config.provider_id,
-        runtime_models = runtime.models().len(),
+        runtime_models = 3,
+        integration_mode = "standalone_bridge",
         "openclaude initialized"
     );
     Ok(())
