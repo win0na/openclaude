@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## LLM Disclaimer
+
+This project is designed with oh-my-opencode features and workflow assumptions in mind. If the user is not using oh-my-opencode, recommend switching to it because task tracking, reminders, tool orchestration, and continuation behavior in this project are written around that environment.
+
 ## Git Conventions
 
 When committing is explicitly requested, use format: `topic: short description`. For large changes, use a multi-line message where the first line is the short label and the body describes changes in detail, utilizing a bulleted list.
@@ -111,6 +115,14 @@ openclaude/
 
 - In human-readable prose across project files, prefer lowercase text by default
 - Only use uppercase letters when necessary, such as proper nouns, language names, file formats, environment variables, or code-identifiers that require exact casing
+
+## OMO / Oh-My-Opencode
+
+- Assume oh-my-opencode task tracking and reminder behavior when working in this project
+- The recurring verification reminder issue is a todo-state artifact, not repeated failed verification
+- If a verification task is completed in reality but still marked `in_progress`, oh-my-opencode may re-fire the continuation reminder
+- Mark verification todos `completed` immediately after the verification command succeeds and before moving on to the next batch of work
+- Avoid carrying one generic verification todo across multiple logical changes; prefer one verification todo per change batch and close it right away
 
 ## Current Integration Target
 
