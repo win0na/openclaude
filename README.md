@@ -1,6 +1,6 @@
 # openclaude
 
-standalone bridge and runtime for Claude Code CLI that is designed to integrate with OpenCode without patching the OpenCode codebase.
+translation layer between OpenCode and Claude Code, using a plugin-based frontend and a native translation backend.
 
 ## goal
 
@@ -11,17 +11,19 @@ use Claude Code CLI as the model transport while preserving OpenCode-owned behav
 - reasoning/thinking parts
 - session rendering and tool lifecycle
 
+the purpose of this project is to fit more cleanly within anthropic's guidelines for model usage outside of Claude Code while still preserving the OpenCode experience.
+
 ## no-patch integration direction
 
-`openclaude` is intentionally being built as a standalone runtime, bridge, and service layer rather than as a patch inside OpenCode itself.
+`openclaude` is intentionally being built as a translation layer between OpenCode and Claude Code rather than as a patch inside OpenCode itself.
 
 the intended shape is:
 
 - `openclaude` owns Claude CLI execution, stream translation, session orchestration, and bridge/service APIs
-- a thin external integration layer can talk to `openclaude` over a stable protocol
+- a plugin-based frontend can talk to `openclaude` over a stable protocol
 - OpenCode itself remains unmodified on our side
 
-this means the project is optimizing for a no-patch integration surface, not for private hooks into OpenCode internals
+this means the project is optimizing for a no-patch, plugin-based integration surface rather than private hooks into OpenCode internals
 
 ## status
 

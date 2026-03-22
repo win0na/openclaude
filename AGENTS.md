@@ -36,13 +36,15 @@ If the change affects OpenCode integration knowledge, update the local reference
 
 ## What This Is
 
-`openclaude` is a standalone Rust project for a native OpenCode provider backend powered by Claude Code CLI. The goal is to preserve OpenCode-owned behavior — tools, subagents, background tasks, reasoning blocks, and session rendering — while replacing direct Anthropic OAuth access with a Claude CLI transport.
+`openclaude` is a translation layer between OpenCode and Claude Code. It uses a plugin-based frontend and a native translation backend so OpenCode can preserve its own tooling, orchestration, and rendering semantics while Claude Code remains the model-facing transport.
 
-This project is not an OpenAI-compatible shim. It is a provider-focused backend/library that should model OpenCode's native stream parts and session expectations as closely as possible.
+The purpose of this project is to fit more cleanly within anthropic's guidelines for model usage outside of Claude Code. This project is not an OpenAI-compatible shim; it is a provider-focused translation backend that should model OpenCode's native stream parts and session expectations as closely as possible.
 
 ## Project Goals
 
 - Use Claude Code CLI as the model transport
+- Serve as a translation layer between OpenCode and Claude Code
+- Support a plugin-based frontend with a native translation backend
 - Preserve OpenCode control over tool execution and subagent orchestration
 - Preserve reasoning/thinking rendering in OpenCode's UI
 - Support resumable tool loops and background task semantics
