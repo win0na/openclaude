@@ -1,4 +1,5 @@
 use crate::claude::cli::ClaudeCli;
+use crate::claude::prompt::build_claude_prompt;
 use crate::claude::stream::ClaudeChunk;
 use crate::claude::translate::ClaudeTranslator;
 use crate::provider::{
@@ -28,8 +29,9 @@ impl ClaudeCliRuntime {
     }
 
     pub fn command_args(&self, request: &ProviderRequest) -> Vec<String> {
+        let prompt = build_claude_prompt(request);
         self.cli
-            .stream_args(&request.model.id, request.system_prompt.as_deref())
+            .stream_args(&request.model.id, prompt.system_prompt.as_deref())
     }
 
     pub fn parse_stream_line(&self, line: &str) -> anyhow::Result<Vec<StreamPart>> {
@@ -54,6 +56,7 @@ impl ProviderRuntime for ClaudeCliRuntime {
         request: ProviderRequest,
     ) -> anyhow::Result<std::vec::IntoIter<anyhow::Result<StreamPart>>> {
         let mut output = vec![Ok(StreamPart::Start)];
+        let prompt = build_claude_prompt(&request);
 
         let mut child = Command::new(self.cli.binary())
             .args(self.command_args(&request))
@@ -65,7 +68,7 @@ impl ProviderRuntime for ClaudeCliRuntime {
 
         if let Some(mut stdin) = child.stdin.take() {
             stdin
-                .write_all(request.prompt.as_bytes())
+                .write_all(prompt.user_prompt.as_bytes())
                 .context("failed to write prompt to Claude stdin")?;
         }
 
@@ -110,7 +113,7 @@ impl ProviderRuntime for ClaudeCliRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provider::StreamPart;
+    use crate::provider::{MessageRole, ProviderMessage, StreamPart};
     use std::fs;
     use tempfile::tempdir;
 
@@ -124,6 +127,7 @@ mod tests {
             model: ProviderModel::claude("opus", "Claude Opus"),
             system_prompt: Some("system".into()),
             prompt: "hello".into(),
+            messages: vec![],
         };
 
         let args = runtime.command_args(&request);
@@ -156,6 +160,10 @@ mod tests {
             model: ProviderModel::claude("sonnet", "Claude Sonnet"),
             system_prompt: None,
             prompt: "hello".into(),
+            messages: vec![ProviderMessage {
+                role: MessageRole::User,
+                content: "earlier".into(),
+            }],
         };
 
         let parts = runtime

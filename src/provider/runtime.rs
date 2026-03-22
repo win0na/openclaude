@@ -13,6 +13,21 @@ pub struct ProviderRequest {
     pub model: ProviderModel,
     pub system_prompt: Option<String>,
     pub prompt: String,
+    pub messages: Vec<ProviderMessage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderMessage {
+    pub role: MessageRole,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageRole {
+    System,
+    User,
+    Assistant,
+    Tool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
