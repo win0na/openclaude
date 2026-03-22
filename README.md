@@ -37,7 +37,7 @@ the project currently provides:
 
 ## reference checkout
 
-Use `cargo run -- init` to create or refresh a local OpenCode reference checkout in `opencode-reference/` at the project root.
+Use `cargo run -- reference` to create or refresh a local OpenCode reference checkout in `opencode-reference/` at the project root.
 
 That checkout is ignored by git and exists only as local integration context for this project.
 

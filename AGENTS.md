@@ -53,7 +53,7 @@ This project is not an OpenAI-compatible shim. It is a provider-focused backend/
 Use standard Rust tooling:
 
 ```bash
-cargo run -- init
+cargo run -- reference
 cargo fmt
 cargo test
 cargo build
@@ -134,7 +134,7 @@ openclaude/
 
 - Treat `opencode-reference/` at the project root as the portable local OpenCode integration reference for this repository
 - Do not rely on machine-specific paths like `~/claude/opencode` in project guidance
-- Refresh the reference checkout with `openclaude init` or `cargo run -- init` when bootstrapping the project on a new machine
+- Refresh the reference checkout with `openclaude reference` or `cargo run -- reference` when bootstrapping the project on a new machine
 - If project tooling refreshes the reference on init, prefer the refreshed local checkout over memory or imperative filesystem assumptions
 
 ## Current Integration Target

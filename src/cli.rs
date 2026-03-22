@@ -22,7 +22,7 @@ pub struct Cli {
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum Command {
-    Init {
+    Reference {
         #[arg(long, default_value = ".")]
         project_root: PathBuf,
     },

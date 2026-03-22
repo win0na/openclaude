@@ -16,7 +16,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         .with_ansi(false)
         .init();
 
-    if let Some(Command::Init { project_root }) = &cli.command {
+    if let Some(Command::Reference { project_root }) = &cli.command {
         let result = refresh_reference(project_root)?;
         info!(
             project_root = %project_root.display(),
