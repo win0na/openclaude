@@ -57,7 +57,17 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             info!(addr = %addr, "starting HTTP server");
 
             tokio::runtime::Runtime::new()?.block_on(async {
-                axum::serve(tokio::net::TcpListener::bind(addr).await?, router).await
+                let listener = tokio::net::TcpListener::bind(addr).await?;
+                let local_addr = listener.local_addr()?;
+
+                info!(
+                    addr = %local_addr,
+                    health = %format!("http://{local_addr}/health"),
+                    completions = %format!("http://{local_addr}/v1/chat/completions"),
+                    "HTTP server ready"
+                );
+
+                axum::serve(listener, router).await
             })?;
             Ok(())
         }
