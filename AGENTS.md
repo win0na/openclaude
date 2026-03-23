@@ -58,7 +58,6 @@ Current plugin research indicates that provider routing should live in OpenCode 
 Use standard Rust tooling:
 
 ```bash
-cargo run -- reference
 cargo fmt
 cargo test
 cargo build
