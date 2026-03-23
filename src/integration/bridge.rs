@@ -47,13 +47,14 @@ pub struct BridgeRequest {
 }
 
 #[derive(Clone)]
-pub struct OpenCodeBridge<R: ProviderRuntime> {
+pub struct OpenCodeBridge<R: ProviderRuntime + Clone> {
+    runtime: R,
     adapter: OpenCodeAdapter<R>,
     provider: ProviderInfo,
     models: BTreeMap<String, ProviderModel>,
 }
 
-impl<R: ProviderRuntime> OpenCodeBridge<R> {
+impl<R: ProviderRuntime + Clone> OpenCodeBridge<R> {
     pub fn new(runtime: R, models: impl IntoIterator<Item = ProviderModel>) -> Self {
         let provider = runtime.info();
         let models = models
@@ -62,6 +63,7 @@ impl<R: ProviderRuntime> OpenCodeBridge<R> {
             .collect();
 
         Self {
+            runtime: runtime.clone(),
             adapter: OpenCodeAdapter::new(runtime),
             provider,
             models,
@@ -78,6 +80,19 @@ impl<R: ProviderRuntime> OpenCodeBridge<R> {
 
     pub fn start(&mut self, request: BridgeRequest) -> anyhow::Result<AdapterStep> {
         self.adapter.start(self.to_provider_request(request)?)
+    }
+
+    pub fn stream_events(
+        &self,
+        request: BridgeRequest,
+    ) -> anyhow::Result<
+        Box<dyn Iterator<Item = anyhow::Result<crate::integration::AdapterEvent>> + Send>,
+    > {
+        let stream = self.runtime.stream(self.to_provider_request(request)?)?;
+        Ok(Box::new(stream.filter_map(|part| match part {
+            Ok(part) => crate::integration::adapter::map_stream_part(part).map(Ok),
+            Err(err) => Some(Err(err)),
+        })))
     }
 
     fn to_provider_request(&self, request: BridgeRequest) -> anyhow::Result<ProviderRequest> {
@@ -157,14 +172,16 @@ mod tests {
         fn stream(
             &self,
             _request: ProviderRequest,
-        ) -> anyhow::Result<std::vec::IntoIter<anyhow::Result<StreamPart>>> {
-            Ok(vec![
-                Ok(StreamPart::Start),
-                Ok(StreamPart::Finish {
-                    reason: crate::provider::FinishReason::EndTurn,
-                }),
-            ]
-            .into_iter())
+        ) -> anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<StreamPart>> + Send>> {
+            Ok(Box::new(
+                vec![
+                    Ok(StreamPart::Start),
+                    Ok(StreamPart::Finish {
+                        reason: crate::provider::FinishReason::EndTurn,
+                    }),
+                ]
+                .into_iter(),
+            ))
         }
     }
 
@@ -190,10 +207,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(step.state, AdapterSessionState::Finished);
-        assert!(
-            step.events
-                .iter()
-                .any(|event| matches!(event, AdapterEvent::Start))
-        );
+        assert!(step
+            .events
+            .iter()
+            .any(|event| matches!(event, AdapterEvent::Start)));
     }
 }

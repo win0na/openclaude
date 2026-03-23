@@ -52,5 +52,5 @@ pub trait ProviderRuntime {
     fn stream(
         &self,
         request: ProviderRequest,
-    ) -> anyhow::Result<std::vec::IntoIter<anyhow::Result<StreamPart>>>;
+    ) -> anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<StreamPart>> + Send>>;
 }

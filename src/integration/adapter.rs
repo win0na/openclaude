@@ -79,7 +79,7 @@ fn map_session_state(state: SessionState) -> AdapterSessionState {
     }
 }
 
-fn map_stream_part(part: StreamPart) -> Option<AdapterEvent> {
+pub(crate) fn map_stream_part(part: StreamPart) -> Option<AdapterEvent> {
     match part {
         StreamPart::Start => Some(AdapterEvent::Start),
         StreamPart::ReasoningStart { id } => Some(AdapterEvent::ReasoningStart { id }),
@@ -190,11 +190,10 @@ mod tests {
             mapped.state,
             AdapterSessionState::WaitingForTool(_)
         ));
-        assert!(
-            mapped.events.iter().any(
-                |event| matches!(event, AdapterEvent::ReasoningStart { id } if id == "part-r")
-            )
-        );
+        assert!(mapped
+            .events
+            .iter()
+            .any(|event| matches!(event, AdapterEvent::ReasoningStart { id } if id == "part-r")));
         assert!(mapped.events.iter().any(
             |event| matches!(event, AdapterEvent::ToolInputDelta { id, .. } if id == "toolu_1")
         ));

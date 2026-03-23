@@ -101,9 +101,9 @@ mod tests {
         fn stream(
             &self,
             _request: ProviderRequest,
-        ) -> anyhow::Result<std::vec::IntoIter<anyhow::Result<StreamPart>>> {
+        ) -> anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<StreamPart>> + Send>> {
             let next = self.streams.lock().unwrap().pop_front().unwrap_or_default();
-            Ok(next.into_iter().map(Ok).collect::<Vec<_>>().into_iter())
+            Ok(Box::new(next.into_iter().map(Ok)))
         }
     }
 
