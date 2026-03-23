@@ -22,23 +22,10 @@ pub fn serve_stdio<R: ProviderRuntime + Clone, In: Read, Out: Write>(
                 request_id,
                 response: service.describe(),
             },
-            Ok(ServerCommand::Start {
+            Ok(ServerCommand::Complete {
                 request_id,
                 request,
-            }) => match service.start(request) {
-                Ok(response) => ServerEnvelope::Success {
-                    request_id,
-                    response,
-                },
-                Err(err) => ServerEnvelope::Error {
-                    request_id: Some(request_id),
-                    message: err.to_string(),
-                },
-            },
-            Ok(ServerCommand::Resume {
-                request_id,
-                request,
-            }) => match service.resume(request) {
+            }) => match service.complete(request) {
                 Ok(response) => ServerEnvelope::Success {
                     request_id,
                     response,
@@ -67,19 +54,14 @@ pub fn serve_stdio<R: ProviderRuntime + Clone, In: Read, Out: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integration::{
-        BridgeMessage, BridgeRequest, BridgeRole, BridgeToolResult, OpenCodeBridge,
-    };
+    use crate::integration::{BridgeMessage, BridgeRequest, BridgeRole, OpenCodeBridge};
     use crate::provider::{
         FinishReason, ProviderInfo, ProviderModel, ProviderRequest, ProviderRuntime, StreamPart,
-        ToolResult,
     };
-    use serde_json::json;
 
     #[derive(Clone)]
     struct DescribeRuntime {
         model: ProviderModel,
-        resumed: std::sync::Arc<std::sync::Mutex<bool>>,
     }
 
     impl ProviderRuntime for DescribeRuntime {
@@ -96,28 +78,14 @@ mod tests {
 
         fn stream(
             &self,
-            request: ProviderRequest,
+            _request: ProviderRequest,
         ) -> anyhow::Result<std::vec::IntoIter<anyhow::Result<StreamPart>>> {
-            if request.prompt == "continue" {
-                *self.resumed.lock().unwrap() = true;
-                return Ok(vec![
-                    Ok(StreamPart::TextDelta(crate::provider::TextPart {
-                        id: "part-0".into(),
-                        delta: "done".into(),
-                    })),
-                    Ok(StreamPart::Finish {
-                        reason: FinishReason::EndTurn,
-                    }),
-                ]
-                .into_iter());
-            }
-
             Ok(vec![
                 Ok(StreamPart::ToolCall(crate::provider::ToolCallPart {
                     id: "toolu_1".into(),
                     tool_call_id: "toolu_1".into(),
                     tool_name: "Read".into(),
-                    input: json!({"file_path": "/tmp/a"}),
+                    input: serde_json::json!({"file_path": "/tmp/a"}),
                 })),
                 Ok(StreamPart::Finish {
                     reason: FinishReason::ToolCall,
@@ -125,27 +93,13 @@ mod tests {
             ]
             .into_iter())
         }
-
-        fn submit_tool_result(
-            &self,
-            _result: ToolResult,
-        ) -> anyhow::Result<Option<ProviderRequest>> {
-            Ok(Some(ProviderRequest {
-                model: self.model.clone(),
-                system_prompt: None,
-                prompt: "continue".into(),
-                messages: vec![],
-            }))
-        }
     }
 
     #[test]
-    fn serve_stdio_handles_describe_start_and_resume_with_session_ids() {
+    fn serve_stdio_handles_describe_and_complete() {
         let model = ProviderModel::claude("sonnet", "Claude Sonnet");
-        let resumed = std::sync::Arc::new(std::sync::Mutex::new(false));
         let runtime = DescribeRuntime {
             model: model.clone(),
-            resumed: resumed.clone(),
         };
         let bridge = OpenCodeBridge::new(runtime, vec![model]);
         let mut service = OpenClaudeService::new(bridge);
@@ -155,7 +109,7 @@ mod tests {
                 request_id: "req-1".into(),
             })
             .unwrap(),
-            serde_json::to_string(&ServerCommand::Start {
+            serde_json::to_string(&ServerCommand::Complete {
                 request_id: "req-2".into(),
                 request: crate::server::ServerRequest {
                     conversation: BridgeRequest {
@@ -166,18 +120,6 @@ mod tests {
                             role: BridgeRole::User,
                             content: "earlier".into(),
                         }],
-                    },
-                },
-            })
-            .unwrap(),
-            serde_json::to_string(&ServerCommand::Resume {
-                request_id: "req-3".into(),
-                request: crate::server::ServerContinueRequest {
-                    session_id: "session-1".into(),
-                    tool_result: BridgeToolResult {
-                        call_id: "toolu_1".into(),
-                        tool_name: Some("Read".into()),
-                        output: json!({"content": "file"}),
                     },
                 },
             })
@@ -193,8 +135,5 @@ mod tests {
         assert!(responses.contains("\"kind\":\"success\""));
         assert!(responses.contains("\"request_id\":\"req-1\""));
         assert!(responses.contains("\"request_id\":\"req-2\""));
-        assert!(responses.contains("\"request_id\":\"req-3\""));
-        assert!(responses.contains("\"session_id\":\"session-1\""));
-        assert!(*resumed.lock().unwrap());
     }
 }

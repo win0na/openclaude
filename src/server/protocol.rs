@@ -1,4 +1,4 @@
-use crate::integration::{AdapterStep, BridgeRequest, BridgeToolResult};
+use crate::integration::{AdapterStep, BridgeRequest};
 use crate::provider::ProviderModel;
 use serde::{Deserialize, Serialize};
 
@@ -8,13 +8,9 @@ pub enum ServerCommand {
     Describe {
         request_id: String,
     },
-    Start {
+    Complete {
         request_id: String,
         request: ServerRequest,
-    },
-    Resume {
-        request_id: String,
-        request: ServerContinueRequest,
     },
 }
 
@@ -24,14 +20,7 @@ pub struct ServerRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ServerContinueRequest {
-    pub session_id: String,
-    pub tool_result: BridgeToolResult,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ServerResponse {
-    pub session_id: Option<String>,
     pub metadata: Option<ServerMetadata>,
     pub step: AdapterStep,
 }
