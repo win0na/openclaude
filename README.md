@@ -59,6 +59,52 @@ the project currently provides:
 - an optional local OpenCode checkout under `opencode-reference/` for direct source inspection
 - a stateless complete-request protocol that expects full OpenCode-owned history on every call
 
+## architecture
+
+`openclaude` now has three separate responsibilities.
+
+### backend
+
+The Rust backend is the translation layer.
+
+- `openclaude serve` starts an OpenAI-compatible HTTP server
+- OpenCode sends requests to that server as a provider endpoint
+- the backend translates requests into Claude Code CLI execution
+- the backend translates Claude Code output back into OpenCode-facing responses
+- the backend stays stateless and does not own canonical session state
+
+### plugin
+
+The plugin is a thin runtime shim.
+
+- it declares auth metadata for the `openclaude` provider
+- it adds request headers like session id and agent name
+- it adds small provider-specific request params
+- it does not register providers dynamically
+- it does not own transport or session logic
+
+### bootstrap wrapper
+
+The wrapper is what bare `openclaude` does by default.
+
+- it prepares temporary bootstrap config for the launched process
+- it injects the `openclaude` provider entry
+- it injects the local plugin entry
+- it launches the real `opencode` binary
+- it leaves the user's normal OpenCode config files unchanged
+
+### runtime flow
+
+1. the user runs `openclaude`
+2. `openclaude` builds bootstrap config for the process
+3. `openclaude` sets `OPENCODE_CONFIG_CONTENT`
+4. `openclaude` launches `opencode`
+5. OpenCode loads its usual config sources, then merges the injected inline config
+6. OpenCode loads the injected plugin and provider entry
+7. the plugin shapes requests at runtime
+8. OpenCode sends provider traffic to `openclaude serve`
+9. the backend translates to Claude Code CLI and returns responses
+
 ## reference docs
 
 Use the tracked reference docs in `docs/` when implementing backend or integration changes:
