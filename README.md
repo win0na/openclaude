@@ -21,9 +21,16 @@ the intended shape is:
 
 - `openclaude` owns Claude CLI execution, stream translation, session orchestration, and bridge/service APIs
 - a plugin-based frontend can talk to `openclaude` over a stable protocol
+- provider routing should be declared in OpenCode configuration, while the plugin stays thin and handles auth and request shaping
 - OpenCode itself remains unmodified on our side
 
 this means the project is optimizing for a no-patch, plugin-based integration surface rather than private hooks into OpenCode internals
+
+based on current plugin research, the plugin layer should not try to register a brand-new provider runtime by itself. the expected pattern is:
+
+- provider routing and base URL in config
+- a thin plugin frontend for auth, headers, params, and message transforms
+- `openclaude` as the stateless native translation backend
 
 ## status
 
@@ -36,6 +43,7 @@ the project currently provides:
 - adapter and bridge entrypoints
 - a standalone service core for start/resume flows
 - a project-local OpenCode reference checkout under `opencode-reference/` after initialization
+- a stateless complete-request protocol that expects full OpenCode-owned history on every call
 
 ## reference checkout
 

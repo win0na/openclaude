@@ -40,11 +40,14 @@ If the change affects OpenCode integration knowledge, update the local reference
 
 The purpose of this project is to fit more cleanly within anthropic's guidelines for model usage outside of Claude Code. This project is not an OpenAI-compatible shim; it is a provider-focused translation backend that should model OpenCode's native stream parts and session expectations as closely as possible.
 
+Current plugin research indicates that provider routing should live in OpenCode configuration, while the plugin should remain a thin frontend for auth, headers, params, and transforms. Do not assume a plugin can register a brand-new provider runtime by itself.
+
 ## Project Goals
 
 - Use Claude Code CLI as the model transport
 - Serve as a translation layer between OpenCode and Claude Code
 - Support a plugin-based frontend with a native translation backend
+- Keep the plugin frontend thin; keep the backend stateless and translation-focused
 - Preserve OpenCode control over tool execution and subagent orchestration
 - Preserve reasoning/thinking rendering in OpenCode's UI
 - Support resumable tool loops and background task semantics
@@ -131,6 +134,8 @@ openclaude/
 - If a verification task is completed in reality but still marked `in_progress`, oh-my-opencode may re-fire the continuation reminder
 - Mark verification todos `completed` immediately after the verification command succeeds and before moving on to the next batch of work
 - Avoid carrying one generic verification todo across multiple logical changes; prefer one verification todo per change batch and close it right away
+- `todowrite` is replace-all, not append; every update must include all still-relevant unfinished items as well as new ones
+- Never overwrite unfinished todos accidentally by sending only the newest batch; merge the prior active list forward unless an item is explicitly completed or cancelled
 
 ## Reference Sheet
 
