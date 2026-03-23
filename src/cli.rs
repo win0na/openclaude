@@ -36,15 +36,51 @@ pub enum Command {
     Stdio,
 }
 
+const DETAILED_HELP_GUIDE: &str = r#"quick guide
+
+openclaude is a translation layer between OpenCode and Claude Code. commands stay explicit: nothing starts a server or stdio bridge unless you invoke that command directly.
+
+commands
+
+- serve
+  start the OpenAI-compatible HTTP server. use this for real OpenCode provider integration.
+
+- stdio
+  run the line-oriented stdio bridge. use this for direct subprocess integration or debugging.
+
+- reference
+  refresh the optional local `opencode-reference/` checkout for source inspection.
+
+- help
+  print this detailed help page.
+
+common examples
+
+- `openclaude serve`
+  start the HTTP server on `127.0.0.1:3000`.
+
+- `openclaude serve --host 0.0.0.0 --port 3000`
+  expose the HTTP server on a custom interface and port.
+
+- `openclaude stdio`
+  start the stdio bridge explicitly.
+
+- `openclaude reference`
+  refresh the optional local OpenCode checkout.
+
+notes
+
+- bare `openclaude` prints help instead of starting a transport.
+- `serve` is the primary integration path for no-patch OpenCode usage.
+- `stdio` remains available as an explicit developer transport."#;
+
 pub fn detailed_help() -> String {
     let mut command = Cli::command();
     let mut help = Vec::new();
     command.write_long_help(&mut help).expect("write help");
     let help = String::from_utf8(help).expect("utf8 help");
 
-    format!(
-        "{help}\n\nquick guide\n\nopenclaude is a translation layer between OpenCode and Claude Code. commands stay explicit: nothing starts a server or stdio bridge unless you invoke that command directly.\n\ncommands\n\n- serve\n  start the OpenAI-compatible HTTP server. use this for real OpenCode provider integration.\n\n- stdio\n  run the line-oriented stdio bridge. use this for direct subprocess integration or debugging.\n\n- reference\n  refresh the optional local `opencode-reference/` checkout for source inspection.\n\n- help\n  print this detailed help page.\n\ncommon examples\n\n- `openclaude serve`\n  start the HTTP server on `127.0.0.1:3000`.\n\n- `openclaude serve --host 0.0.0.0 --port 3000`\n  expose the HTTP server on a custom interface and port.\n\n- `openclaude stdio`\n  start the stdio bridge explicitly.\n\n- `openclaude reference`\n  refresh the optional local OpenCode checkout.\n\nnotes\n\n- bare `openclaude` prints help instead of starting a transport.\n- `serve` is the primary integration path for no-patch OpenCode usage.\n- `stdio` remains available as an explicit developer transport."
-    )
+    format!("{help}\n\n{DETAILED_HELP_GUIDE}")
 }
 
 #[cfg(test)]
