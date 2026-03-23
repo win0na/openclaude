@@ -38,11 +38,20 @@ pub enum Command {
 }
 
 fn command_line(style: console::Style, name: &str, description: &str) -> String {
-    format!("  {:<16} {description}", style.command(name))
+    inline_help_line(style.command(name), name, description)
 }
 
 fn option_line(style: console::Style, name: &str, description: &str) -> String {
-    format!("  {:<32} {description}", style.option(name))
+    inline_help_line(style.option(name), name, description)
+}
+
+fn inline_help_line(styled_name: String, plain_name: &str, description: &str) -> String {
+    const DESCRIPTION_COLUMN: usize = 36;
+    let padding = DESCRIPTION_COLUMN
+        .saturating_sub(2 + plain_name.len())
+        .max(1);
+
+    format!("  {styled_name}{}{description}", " ".repeat(padding))
 }
 
 fn render_detailed_help(style: console::Style) -> String {

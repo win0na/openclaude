@@ -36,7 +36,7 @@ impl Style {
     }
 
     pub fn option(self, text: &str) -> String {
-        self.paint(text, "0;92")
+        self.paint(text, "3")
     }
 }
 
