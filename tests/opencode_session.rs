@@ -70,6 +70,14 @@ fn stop_server(child: &mut Child) {
 fn run_wrapper(port: u16, script: &Path, args: &[&str], timeout_secs: u64) -> Output {
     let binary = env!("CARGO_BIN_EXE_openclaude");
     let temp = TempDir::new().unwrap();
+    let home_dir = temp.path().join("home");
+    let config_dir = temp.path().join("config");
+    let data_dir = temp.path().join("data");
+    let cache_dir = temp.path().join("cache");
+    fs::create_dir_all(&home_dir).unwrap();
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::create_dir_all(&data_dir).unwrap();
+    fs::create_dir_all(&cache_dir).unwrap();
     let stdout_path = temp.path().join("wrapper.stdout");
     let stderr_path = temp.path().join("wrapper.stderr");
     let stdout_file = File::create(&stdout_path).unwrap();
@@ -79,6 +87,10 @@ fn run_wrapper(port: u16, script: &Path, args: &[&str], timeout_secs: u64) -> Ou
         .args(args)
         .env("OPENCLAUDE_CLAUDE_BIN", script)
         .env("OPENCLAUDE_BASE_URL", format!("http://127.0.0.1:{port}/v1"))
+        .env("HOME", &home_dir)
+        .env("XDG_CONFIG_HOME", &config_dir)
+        .env("XDG_DATA_HOME", &data_dir)
+        .env("XDG_CACHE_HOME", &cache_dir)
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file));
 
