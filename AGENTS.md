@@ -90,6 +90,11 @@ openclaude/
 │   ├── CLAUDE_CODE_REFERENCE.md
 │   └── OPENCODE_REFERENCE.md
 ├── opencode-reference/       # optional ignored OpenCode checkout created by `openclaude reference`
+├── plugin/
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── src/
+│       └── index.ts          # thin OpenCode plugin frontend
 ├── README.md
 ├── src/
 │   ├── lib.rs                 # library entrypoint and public exports
@@ -121,6 +126,7 @@ openclaude/
 
 - Favor small modules with explicit types and narrow responsibilities
 - Avoid speculative compatibility layers; tie behavior to evidence from `docs/CLAUDE_CODE_REFERENCE.md`, `docs/OPENCODE_REFERENCE.md`, and mirrored integration notes in this repository
+- Keep TypeScript plugin code limited to frontend hook wiring, auth/header/param transforms, and backend forwarding
 - Use doc comments only where the public API or non-obvious invariants need them
 - Keep tests focused on protocol mapping and stream behavior rather than incidental implementation details
 

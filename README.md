@@ -42,6 +42,7 @@ the project currently provides:
 - provider runtime and session orchestration layers
 - adapter and bridge entrypoints
 - a standalone service core for start/resume flows
+- a thin plugin scaffold under `plugin/` for OpenCode-facing hooks
 - tracked internal reference docs under `docs/`
 - an optional local OpenCode checkout under `opencode-reference/` for direct source inspection
 - a stateless complete-request protocol that expects full OpenCode-owned history on every call
@@ -65,6 +66,18 @@ This recreates or refreshes a gitignored `opencode-reference/` checkout at the p
 
 The tracked docs in `docs/` remain the canonical portable references; the checkout is optional and local-only.
 
+## plugin frontend
+
+The intended frontend lives in `plugin/` and should stay thin.
+
+Its job is to:
+
+- integrate with OpenCode's plugin hooks
+- handle auth, headers, params, and message transforms
+- forward full history to the Rust backend
+
+It should not reimplement backend transport or session logic that already belongs in `openclaude`.
+
 ## commands
 
 ```bash
@@ -72,4 +85,12 @@ cargo fmt
 cargo test
 cargo build
 cargo run -- --help
+```
+
+For the plugin scaffold:
+
+```bash
+cd plugin
+npm install
+npm run check
 ```

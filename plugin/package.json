@@ -1,0 +1,19 @@
+{
+  "name": "openclaude-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "thin OpenCode plugin frontend for the openclaude backend",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "latest"
+  }
+}
