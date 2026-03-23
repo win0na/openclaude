@@ -15,6 +15,9 @@ pub struct Cli {
     #[arg(long, env = "OPENCLAUDE_MODEL", default_value = "sonnet")]
     pub default_model: String,
 
+    #[arg(long, env = "OPENCLAUDE_AVAILABLE_MODELS", value_delimiter = ',')]
+    pub available_models: Vec<String>,
+
     #[arg(long, env = "OPENCLAUDE_CLAUDE_BIN", default_value = "claude")]
     pub claude_bin: PathBuf,
 
@@ -34,10 +37,6 @@ pub struct Cli {
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum Command {
-    Bootstrap {
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        args: Vec<OsString>,
-    },
     Help,
     Reference {
         #[arg(long, default_value = ".")]
@@ -63,7 +62,7 @@ fn option_line(style: console::Style, name: &str, description: &str) -> String {
 }
 
 fn inline_help_line(styled_name: String, plain_name: &str, description: &str) -> String {
-    const DESCRIPTION_COLUMN: usize = 36;
+    const DESCRIPTION_COLUMN: usize = 44;
     let padding = DESCRIPTION_COLUMN
         .saturating_sub(2 + plain_name.len())
         .max(1);
@@ -71,22 +70,30 @@ fn inline_help_line(styled_name: String, plain_name: &str, description: &str) ->
     format!("  {styled_name}{}{description}", " ".repeat(padding))
 }
 
+fn help_block(styled_name: String, description: &str) -> [String; 2] {
+    [format!("  {styled_name}"), format!("    {description}")]
+}
+
 fn render_detailed_help(style: console::Style) -> String {
-    [
+    let mut lines = vec![
         style.title("openclaude"),
         String::new(),
-        style.heading("Usage:"),
+        style.heading("usage:"),
         format!("  {}", style.command("openclaude [OPTIONS] [COMMAND]")),
         String::new(),
-        style.heading("Example:"),
-        format!("  {}", style.command("openclaude")),
+        style.heading("example:"),
+    ];
+    lines.extend(help_block(
+        style.command("openclaude"),
+        "default: launch opencode with bootstrap config and plugin",
+    ));
+    lines.extend(help_block(
+        style.command("openclaude serve"),
+        "start the HTTP backend server",
+    ));
+    lines.extend([
         String::new(),
-        style.heading("Commands:"),
-        command_line(
-            style,
-            "bootstrap",
-            "launch opencode with bootstrap config and plugin",
-        ),
+        style.heading("commands:"),
         command_line(style, "help", "print the detailed help page"),
         command_line(
             style,
@@ -94,9 +101,9 @@ fn render_detailed_help(style: console::Style) -> String {
             "refresh the optional local opencode checkout",
         ),
         command_line(style, "serve", "start the HTTP backend server"),
-        command_line(style, "stdio", "start the stdio bridge explicitly"),
+        command_line(style, "stdio", "start the STDIO bridge explicitly"),
         String::new(),
-        style.heading("Options:"),
+        style.heading("options:"),
         option_line(
             style,
             "--provider-id <PROVIDER_ID>",
@@ -106,6 +113,11 @@ fn render_detailed_help(style: console::Style) -> String {
             style,
             "--default-model <DEFAULT_MODEL>",
             "[env: OPENCLAUDE_MODEL=] [default: sonnet]",
+        ),
+        option_line(
+            style,
+            "--available-models <AVAILABLE_MODELS>",
+            "[env: OPENCLAUDE_AVAILABLE_MODELS=] [comma-separated override]",
         ),
         option_line(
             style,
@@ -128,8 +140,18 @@ fn render_detailed_help(style: console::Style) -> String {
             "[env: OPENCLAUDE_WORKDIR=] [default: /tmp/openclaude]",
         ),
         option_line(style, "-h, --help", "print help"),
-    ]
-    .join("\n")
+        String::new(),
+        style.heading("subcommand usage:"),
+    ]);
+    lines.extend(help_block(
+        style.command("openclaude serve [--host <HOST>] [--port <PORT>]"),
+        "start the HTTP backend server",
+    ));
+    lines.extend(help_block(
+        style.command("openclaude reference [--project-root <PROJECT_ROOT>]"),
+        "refresh the optional local opencode checkout",
+    ));
+    lines.join("\n")
 }
 
 pub fn detailed_help() -> String {
@@ -144,13 +166,19 @@ mod tests {
     fn detailed_help_mentions_explicit_commands() {
         let help = render_detailed_help(console::Style::plain());
 
-        assert!(help.contains("Usage:"));
-        assert!(help.contains("Example:"));
+        assert!(help.contains("usage:"));
+        assert!(help.contains("example:"));
         assert!(help.contains("openclaude"));
-        assert!(help.contains("bootstrap"));
+        assert!(help.contains("default: launch opencode with bootstrap config and plugin"));
+        assert!(help.contains("openclaude serve"));
+        assert!(help.contains("start the HTTP backend server"));
+        assert!(help.contains("subcommand usage:"));
+        assert!(help.contains("openclaude serve [--host <HOST>] [--port <PORT>]"));
+        assert!(help.contains("openclaude reference [--project-root <PROJECT_ROOT>]"));
         assert!(help.contains("launch opencode with bootstrap config and plugin"));
+        assert!(!help.contains("  bootstrap"));
         assert!(help.contains("stdio"));
-        assert!(help.contains("start the stdio bridge explicitly"));
+        assert!(help.contains("start the STDIO bridge explicitly"));
         assert!(!help.contains("quick guide"));
     }
 
