@@ -95,10 +95,23 @@ pub struct ChatFunction {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ChatToolChoice {
+    Mode(ChatToolChoiceMode),
+    Function(ChatNamedToolChoice),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatToolChoiceMode {
     Auto,
     None,
     Required,
-    Function { function: ChatFunctionChoice },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ChatNamedToolChoice {
+    #[serde(rename = "type")]
+    pub tool_type: ChatToolType,
+    pub function: ChatFunctionChoice,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -216,6 +229,48 @@ mod tests {
         assert_eq!(request.model, "claude-sonnet");
         assert_eq!(request.messages.len(), 1);
         assert!(request.stream);
+    }
+
+    #[test]
+    fn parses_string_tool_choice() {
+        let json = r#"{
+            "model": "claude-sonnet",
+            "messages": [
+                {"role": "user", "content": "hello"}
+            ],
+            "tool_choice": "auto"
+        }"#;
+
+        let request: ChatRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            request.tool_choice,
+            Some(ChatToolChoice::Mode(ChatToolChoiceMode::Auto))
+        );
+    }
+
+    #[test]
+    fn parses_function_tool_choice() {
+        let json = r#"{
+            "model": "claude-sonnet",
+            "messages": [
+                {"role": "user", "content": "hello"}
+            ],
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "Read"}
+            }
+        }"#;
+
+        let request: ChatRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            request.tool_choice,
+            Some(ChatToolChoice::Function(ChatNamedToolChoice {
+                tool_type: ChatToolType::Function,
+                function: ChatFunctionChoice {
+                    name: "Read".into(),
+                },
+            }))
+        );
     }
 
     #[test]
