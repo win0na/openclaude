@@ -102,11 +102,10 @@ mod tests {
                 conversation: BridgeRequest {
                     model_id: "sonnet".into(),
                     system_prompt: None,
-                    prompt: "hello".into(),
                     messages: vec![BridgeMessage {
                         role: BridgeRole::User,
                         parts: vec![BridgeMessagePart::Text {
-                            text: "earlier".into(),
+                            text: "earlier\n\nhello".into(),
                         }],
                     }],
                 },

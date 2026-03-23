@@ -127,8 +127,12 @@ mod tests {
         let request = ProviderRequest {
             model: ProviderModel::claude("opus", "Claude Opus"),
             system_prompt: Some("system".into()),
-            prompt: "hello".into(),
-            messages: vec![],
+            messages: vec![ProviderMessage {
+                role: MessageRole::User,
+                parts: vec![MessagePart::Text {
+                    text: "hello".into(),
+                }],
+            }],
         };
 
         let args = runtime.command_args(&request);
@@ -160,11 +164,10 @@ mod tests {
         let request = ProviderRequest {
             model: ProviderModel::claude("sonnet", "Claude Sonnet"),
             system_prompt: None,
-            prompt: "hello".into(),
             messages: vec![ProviderMessage {
                 role: MessageRole::User,
                 parts: vec![MessagePart::Text {
-                    text: "earlier".into(),
+                    text: "earlier\n\nhello".into(),
                 }],
             }],
         };

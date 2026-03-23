@@ -43,7 +43,6 @@ pub enum BridgeRole {
 pub struct BridgeRequest {
     pub model_id: String,
     pub system_prompt: Option<String>,
-    pub prompt: String,
     pub messages: Vec<BridgeMessage>,
 }
 
@@ -91,7 +90,6 @@ impl<R: ProviderRuntime> OpenCodeBridge<R> {
         Ok(ProviderRequest {
             model,
             system_prompt: request.system_prompt,
-            prompt: request.prompt,
             messages: request
                 .messages
                 .into_iter()
@@ -182,11 +180,10 @@ mod tests {
             .start(BridgeRequest {
                 model_id: "sonnet".into(),
                 system_prompt: Some("system".into()),
-                prompt: "hello".into(),
                 messages: vec![BridgeMessage {
                     role: BridgeRole::User,
                     parts: vec![BridgeMessagePart::Text {
-                        text: "earlier".into(),
+                        text: "earlier\n\nhello".into(),
                     }],
                 }],
             })

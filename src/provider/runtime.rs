@@ -12,7 +12,6 @@ pub struct ProviderInfo {
 pub struct ProviderRequest {
     pub model: ProviderModel,
     pub system_prompt: Option<String>,
-    pub prompt: String,
     pub messages: Vec<ProviderMessage>,
 }
 

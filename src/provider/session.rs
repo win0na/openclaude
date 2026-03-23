@@ -111,11 +111,10 @@ mod tests {
         ProviderRequest {
             model: ProviderModel::claude("sonnet", "Claude Sonnet"),
             system_prompt: None,
-            prompt: "hello".into(),
             messages: vec![ProviderMessage {
                 role: MessageRole::User,
                 parts: vec![MessagePart::Text {
-                    text: "earlier".into(),
+                    text: "earlier\n\nhello".into(),
                 }],
             }],
         }

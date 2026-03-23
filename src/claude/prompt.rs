@@ -17,7 +17,6 @@ pub fn build_claude_prompt(request: &ProviderRequest) -> ClaudePrompt {
     }
 
     let mut body = String::new();
-    let mut saw_messages = false;
 
     for message in &request.messages {
         let rendered = render_message_parts(&message.parts);
@@ -25,7 +24,6 @@ pub fn build_claude_prompt(request: &ProviderRequest) -> ClaudePrompt {
             continue;
         }
 
-        saw_messages = true;
         match message.role {
             MessageRole::System => system_sections.push(rendered),
             MessageRole::User => {
@@ -40,9 +38,7 @@ pub fn build_claude_prompt(request: &ProviderRequest) -> ClaudePrompt {
         }
     }
 
-    if !request.prompt.trim().is_empty() {
-        push_section(&mut body, "user", request.prompt.trim());
-    } else if !saw_messages {
+    if body.is_empty() {
         push_section(&mut body, "user", "");
     }
 
@@ -108,7 +104,6 @@ mod tests {
         let prompt = build_claude_prompt(&ProviderRequest {
             model: ProviderModel::claude("sonnet", "Claude Sonnet"),
             system_prompt: Some("provider rules".into()),
-            prompt: "latest question".into(),
             messages: vec![
                 ProviderMessage {
                     role: MessageRole::System,
@@ -141,6 +136,12 @@ mod tests {
                         call_id: "toolu_1".into(),
                         tool_name: Some("Read".into()),
                         output: json!({"content": "tool result"}),
+                    }],
+                },
+                ProviderMessage {
+                    role: MessageRole::User,
+                    parts: vec![MessagePart::Text {
+                        text: "latest question".into(),
                     }],
                 },
             ],
