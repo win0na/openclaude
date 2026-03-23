@@ -25,7 +25,7 @@ impl ClaudeCliRuntime {
         Self {
             info: ProviderInfo {
                 id: "openclaude".into(),
-                name: "OpenClaude".into(),
+                name: "openclaude".into(),
             },
             cli: ClaudeCli::new(binary),
             models,
