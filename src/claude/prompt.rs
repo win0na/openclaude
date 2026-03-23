@@ -33,7 +33,7 @@ pub fn build_claude_prompt(request: &ProviderRequest) -> ClaudePrompt {
                 push_section(&mut body, "assistant", &rendered);
             }
             MessageRole::Tool => {
-                push_section(&mut body, "tool", &rendered);
+                push_section(&mut body, "user", &rendered);
             }
         }
     }
@@ -154,7 +154,9 @@ mod tests {
         assert!(prompt.user_prompt.contains("user:\nfirst question"));
         assert!(prompt.user_prompt.contains("assistant:\nfirst answer"));
         assert!(prompt.user_prompt.contains("tool_call:\n- id: toolu_1"));
-        assert!(prompt.user_prompt.contains("tool_result:\n- id: toolu_1"));
+        assert!(prompt
+            .user_prompt
+            .contains("user:\ntool_result:\n- id: toolu_1"));
         assert!(prompt.user_prompt.ends_with("user:\nlatest question"));
     }
 }

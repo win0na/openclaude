@@ -1,4 +1,6 @@
-use crate::claude::stream::{ClaudeChunk, ClaudeContentBlock, ClaudeDelta, ClaudeStreamEvent};
+use crate::claude::stream::{
+    ClaudeChunk, ClaudeContentBlock, ClaudeDelta, ClaudeMessage, ClaudeStreamEvent,
+};
 use crate::provider::stream::{
     ReasoningPart, StreamPart, TextPart, ToolCallPart, ToolInputDeltaPart, ToolInputStartPart,
 };
@@ -24,6 +26,7 @@ struct ActiveToolUse {
 pub struct ClaudeTranslator {
     active_blocks: HashMap<u32, ActiveBlockKind>,
     active_tool_uses: HashMap<u32, ActiveToolUse>,
+    saw_stream_event: bool,
 }
 
 impl ClaudeTranslator {
@@ -33,16 +36,25 @@ impl ClaudeTranslator {
 
     pub fn push_chunk(&mut self, chunk: &ClaudeChunk) -> Vec<StreamPart> {
         match chunk.kind.as_str() {
-            "stream_event" => chunk
-                .event
-                .as_ref()
-                .map(|event| self.push_stream_event(event))
-                .unwrap_or_default(),
-            "assistant" => chunk
-                .message
-                .as_ref()
-                .map(assistant_message_to_parts)
-                .unwrap_or_default(),
+            "stream_event" => {
+                self.saw_stream_event = true;
+                chunk
+                    .event
+                    .as_ref()
+                    .map(|event| self.push_stream_event(event))
+                    .unwrap_or_default()
+            }
+            "assistant" => {
+                if self.saw_stream_event {
+                    Vec::new()
+                } else {
+                    chunk
+                        .message
+                        .as_ref()
+                        .map(assistant_message_to_parts)
+                        .unwrap_or_default()
+                }
+            }
             _ => Vec::new(),
         }
     }
@@ -91,6 +103,7 @@ impl ClaudeTranslator {
                     tool_name: name.clone(),
                 })]
             }
+            Some(ClaudeContentBlock::ToolResult { .. }) => Vec::new(),
             None => Vec::new(),
         }
     }
@@ -100,7 +113,12 @@ impl ClaudeTranslator {
             return Vec::new();
         };
 
-        match event.delta.as_ref() {
+        let delta = event
+            .delta
+            .as_ref()
+            .and_then(|value| serde_json::from_value::<ClaudeDelta>(value.clone()).ok());
+
+        match delta.as_ref() {
             Some(ClaudeDelta::Thinking { thinking }) => {
                 vec![StreamPart::ReasoningDelta(ReasoningPart {
                     id: part_id(index),
@@ -164,9 +182,7 @@ pub fn chunk_to_stream_parts(chunk: &ClaudeChunk) -> Vec<StreamPart> {
     translator.push_chunk(chunk)
 }
 
-fn assistant_message_to_parts(
-    message: &crate::claude::stream::ClaudeAssistantMessage,
-) -> Vec<StreamPart> {
+fn assistant_message_to_parts(message: &ClaudeMessage) -> Vec<StreamPart> {
     let mut parts = Vec::new();
 
     for (index, block) in message.content.iter().enumerate() {
@@ -212,6 +228,7 @@ fn assistant_message_to_parts(
                     input: input.clone(),
                 }));
             }
+            ClaudeContentBlock::ToolResult { .. } => {}
             _ => {}
         }
     }
@@ -227,7 +244,7 @@ fn part_id(index: u32) -> String {
 mod tests {
     use super::*;
     use crate::claude::stream::{
-        ClaudeAssistantMessage, ClaudeChunk, ClaudeContentBlock, ClaudeDelta, ClaudeStreamEvent,
+        ClaudeChunk, ClaudeContentBlock, ClaudeMessage, ClaudeStreamEvent,
     };
     use serde_json::json;
 
@@ -239,9 +256,10 @@ mod tests {
                 kind: "content_block_delta".into(),
                 index: Some(0),
                 content_block: None,
-                delta: Some(ClaudeDelta::Thinking {
-                    thinking: "abc".into(),
-                }),
+                delta: Some(json!({
+                    "type": "thinking_delta",
+                    "thinking": "abc"
+                })),
             }),
             message: None,
         };
@@ -261,7 +279,8 @@ mod tests {
         let chunk = ClaudeChunk {
             kind: "assistant".into(),
             event: None,
-            message: Some(ClaudeAssistantMessage {
+            message: Some(ClaudeMessage {
+                role: Some("assistant".into()),
                 content: vec![ClaudeContentBlock::ToolUse {
                     id: "toolu_1".into(),
                     name: "Read".into(),
@@ -326,9 +345,10 @@ mod tests {
                 kind: "content_block_delta".into(),
                 index: Some(1),
                 content_block: None,
-                delta: Some(ClaudeDelta::InputJson {
-                    partial_json: r#"{"file_path":"/tmp/a""#.into(),
-                }),
+                delta: Some(json!({
+                    "type": "input_json_delta",
+                    "partial_json": r#"{"file_path":"/tmp/a""#
+                })),
             }),
             message: None,
         };
@@ -340,9 +360,10 @@ mod tests {
                 kind: "content_block_delta".into(),
                 index: Some(1),
                 content_block: None,
-                delta: Some(ClaudeDelta::InputJson {
-                    partial_json: r#", "old_string":"x"}"#.into(),
-                }),
+                delta: Some(json!({
+                    "type": "input_json_delta",
+                    "partial_json": r#", "old_string":"x"}"#
+                })),
             }),
             message: None,
         };
@@ -373,5 +394,56 @@ mod tests {
                 }),
             ]
         );
+    }
+
+    #[test]
+    fn ignores_assistant_summary_after_stream_events() {
+        let mut translator = ClaudeTranslator::new();
+
+        let streamed = ClaudeChunk {
+            kind: "stream_event".into(),
+            event: Some(ClaudeStreamEvent {
+                kind: "content_block_delta".into(),
+                index: Some(0),
+                content_block: None,
+                delta: Some(json!({
+                    "type": "text_delta",
+                    "text": "hello"
+                })),
+            }),
+            message: None,
+        };
+
+        let assistant = ClaudeChunk {
+            kind: "assistant".into(),
+            event: None,
+            message: Some(ClaudeMessage {
+                role: Some("assistant".into()),
+                content: vec![ClaudeContentBlock::Text {
+                    text: "hello".into(),
+                }],
+            }),
+        };
+
+        assert_eq!(translator.push_chunk(&streamed).len(), 1);
+        assert!(translator.push_chunk(&assistant).is_empty());
+    }
+
+    #[test]
+    fn ignores_user_tool_result_chunks() {
+        let chunk = ClaudeChunk {
+            kind: "user".into(),
+            event: None,
+            message: Some(ClaudeMessage {
+                role: Some("user".into()),
+                content: vec![ClaudeContentBlock::ToolResult {
+                    tool_use_id: "toolu_1".into(),
+                    content: json!("ok"),
+                    is_error: Some(false),
+                }],
+            }),
+        };
+
+        assert!(chunk_to_stream_parts(&chunk).is_empty());
     }
 }
