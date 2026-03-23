@@ -26,4 +26,11 @@ pub enum Command {
         #[arg(long, default_value = ".")]
         project_root: PathBuf,
     },
+    Serve {
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        #[arg(long, default_value = "3000")]
+        port: u16,
+    },
+    Stdio,
 }
