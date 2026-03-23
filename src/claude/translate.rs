@@ -1,6 +1,7 @@
 use crate::claude::stream::{
     ClaudeChunk, ClaudeContentBlock, ClaudeDelta, ClaudeMessage, ClaudeStreamEvent,
 };
+use crate::claude::tool_name::normalize_tool_name;
 use crate::provider::stream::{
     ReasoningPart, StreamPart, TextPart, ToolCallPart, ToolInputDeltaPart, ToolInputStartPart,
 };
@@ -93,14 +94,14 @@ impl ClaudeTranslator {
                     index,
                     ActiveToolUse {
                         id: id.clone(),
-                        tool_name: name.clone(),
+                        tool_name: normalize_tool_name(name).to_string(),
                         raw_input,
                         parsed_input: input.clone(),
                     },
                 );
                 vec![StreamPart::ToolInputStart(ToolInputStartPart {
                     id: id.clone(),
-                    tool_name: name.clone(),
+                    tool_name: normalize_tool_name(name).to_string(),
                 })]
             }
             Some(ClaudeContentBlock::ToolResult { .. }) => Vec::new(),
@@ -167,7 +168,7 @@ impl ClaudeTranslator {
                     StreamPart::ToolCall(ToolCallPart {
                         id: tool_use.id.clone(),
                         tool_call_id: tool_use.id,
-                        tool_name: tool_use.tool_name,
+                        tool_name: normalize_tool_name(&tool_use.tool_name).to_string(),
                         input: tool_use.parsed_input,
                     }),
                 ]
@@ -211,7 +212,7 @@ fn assistant_message_to_parts(message: &ClaudeMessage) -> Vec<StreamPart> {
             ClaudeContentBlock::ToolUse { id, name, input } => {
                 parts.push(StreamPart::ToolInputStart(ToolInputStartPart {
                     id: id.clone(),
-                    tool_name: name.clone(),
+                    tool_name: normalize_tool_name(name).to_string(),
                 }));
                 let raw = input.to_string();
                 if !raw.is_empty() && raw != "{}" {
@@ -224,7 +225,7 @@ fn assistant_message_to_parts(message: &ClaudeMessage) -> Vec<StreamPart> {
                 parts.push(StreamPart::ToolCall(ToolCallPart {
                     id: id.clone(),
                     tool_call_id: id.clone(),
-                    tool_name: name.clone(),
+                    tool_name: normalize_tool_name(name).to_string(),
                     input: input.clone(),
                 }));
             }
@@ -294,7 +295,7 @@ mod tests {
             vec![
                 StreamPart::ToolInputStart(ToolInputStartPart {
                     id: "toolu_1".into(),
-                    tool_name: "Read".into(),
+                    tool_name: "read".into(),
                 }),
                 StreamPart::ToolInputDelta(ToolInputDeltaPart {
                     id: "toolu_1".into(),
@@ -306,7 +307,7 @@ mod tests {
                 StreamPart::ToolCall(ToolCallPart {
                     id: "toolu_1".into(),
                     tool_call_id: "toolu_1".into(),
-                    tool_name: "Read".into(),
+                    tool_name: "read".into(),
                     input: json!({"file_path": "/tmp/a"}),
                 }),
             ]
@@ -335,7 +336,7 @@ mod tests {
             translator.push_chunk(&start),
             vec![StreamPart::ToolInputStart(ToolInputStartPart {
                 id: "toolu_2".into(),
-                tool_name: "Edit".into(),
+                tool_name: "edit".into(),
             })]
         );
 
@@ -389,7 +390,7 @@ mod tests {
                 StreamPart::ToolCall(ToolCallPart {
                     id: "toolu_2".into(),
                     tool_call_id: "toolu_2".into(),
-                    tool_name: "Edit".into(),
+                    tool_name: "edit".into(),
                     input: json!({"file_path":"/tmp/a", "old_string":"x"}),
                 }),
             ]
@@ -445,5 +446,82 @@ mod tests {
         };
 
         assert!(chunk_to_stream_parts(&chunk).is_empty());
+    }
+
+    #[test]
+    fn normalizes_claude_native_websearch_tool_name() {
+        let chunk = ClaudeChunk {
+            kind: "assistant".into(),
+            event: None,
+            message: Some(ClaudeMessage {
+                role: Some("assistant".into()),
+                content: vec![ClaudeContentBlock::ToolUse {
+                    id: "toolu_1".into(),
+                    name: "WebSearch".into(),
+                    input: json!({"query": "rust"}),
+                }],
+            }),
+        };
+
+        let parts = chunk_to_stream_parts(&chunk);
+        assert!(matches!(
+            &parts[0],
+            StreamPart::ToolInputStart(ToolInputStartPart { tool_name, .. }) if tool_name == "websearch_web_search_exa"
+        ));
+        assert!(matches!(
+            &parts[3],
+            StreamPart::ToolCall(ToolCallPart { tool_name, .. }) if tool_name == "websearch_web_search_exa"
+        ));
+    }
+
+    #[test]
+    fn normalizes_claude_native_toolsearch_tool_name() {
+        let chunk = ClaudeChunk {
+            kind: "assistant".into(),
+            event: None,
+            message: Some(ClaudeMessage {
+                role: Some("assistant".into()),
+                content: vec![ClaudeContentBlock::ToolUse {
+                    id: "toolu_9".into(),
+                    name: "ToolSearch".into(),
+                    input: json!({"query": "tool names"}),
+                }],
+            }),
+        };
+
+        let parts = chunk_to_stream_parts(&chunk);
+        assert!(matches!(
+            &parts[0],
+            StreamPart::ToolInputStart(ToolInputStartPart { tool_name, .. }) if tool_name == "websearch_web_search_exa"
+        ));
+        assert!(matches!(
+            &parts[3],
+            StreamPart::ToolCall(ToolCallPart { tool_name, .. }) if tool_name == "websearch_web_search_exa"
+        ));
+    }
+
+    #[test]
+    fn normalizes_claude_native_multiedit_tool_name() {
+        let mut translator = ClaudeTranslator::new();
+        let chunk = ClaudeChunk {
+            kind: "stream_event".into(),
+            event: Some(ClaudeStreamEvent {
+                kind: "content_block_start".into(),
+                index: Some(0),
+                content_block: Some(ClaudeContentBlock::ToolUse {
+                    id: "toolu_2".into(),
+                    name: "MultiEdit".into(),
+                    input: json!({}),
+                }),
+                delta: None,
+            }),
+            message: None,
+        };
+
+        let parts = translator.push_chunk(&chunk);
+        assert!(matches!(
+            &parts[0],
+            StreamPart::ToolInputStart(ToolInputStartPart { tool_name, .. }) if tool_name == "edit"
+        ));
     }
 }
