@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use std::env;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Parser)]
@@ -36,45 +37,118 @@ pub enum Command {
     Stdio,
 }
 
-const DETAILED_HELP_GUIDE: &str = r#"openclaude
+#[derive(Clone, Copy)]
+struct HelpStyle {
+    enabled: bool,
+}
 
-Usage:
-  openclaude [OPTIONS] [COMMAND]
+impl HelpStyle {
+    fn plain() -> Self {
+        Self { enabled: false }
+    }
 
-Example:
-  openclaude serve
+    fn color() -> Self {
+        Self { enabled: true }
+    }
 
-Commands:
-  help
-      print the detailed help page
+    fn paint(self, text: &str, ansi: &str) -> String {
+        if self.enabled {
+            format!("\x1b[{ansi}m{text}\x1b[0m")
+        } else {
+            text.to_string()
+        }
+    }
 
-  reference
-      refresh the optional local opencode checkout
+    fn title(self, text: &str) -> String {
+        self.paint(text, "1;96")
+    }
 
-  serve
-      start the HTTP server; primary integration command
+    fn heading(self, text: &str) -> String {
+        self.paint(text, "1;94")
+    }
 
-  stdio
-      start the stdio bridge explicitly
+    fn command(self, text: &str) -> String {
+        self.paint(text, "1;93")
+    }
 
-Options:
-  --provider-id <PROVIDER_ID>
-      [env: OPENCLAUDE_PROVIDER_ID=] [default: openclaude]
+    fn option(self, text: &str) -> String {
+        self.paint(text, "0;92")
+    }
+}
 
-  --default-model <DEFAULT_MODEL>
-      [env: OPENCLAUDE_MODEL=] [default: sonnet]
+fn command_line(style: HelpStyle, name: &str, description: &str) -> String {
+    format!("  {}\n      {description}", style.command(name))
+}
 
-  --claude-bin <CLAUDE_BIN>
-      [env: OPENCLAUDE_CLAUDE_BIN=] [default: claude]
+fn option_line(style: HelpStyle, name: &str, description: &str) -> String {
+    format!("  {}\n      {description}", style.option(name))
+}
 
-  --workdir <WORKDIR>
-      [env: OPENCLAUDE_WORKDIR=] [default: /tmp/openclaude]
+fn render_detailed_help(style: HelpStyle) -> String {
+    [
+        style.title("openclaude"),
+        String::new(),
+        style.heading("Usage:"),
+        format!("  {}", style.command("openclaude [OPTIONS] [COMMAND]")),
+        String::new(),
+        style.heading("Example:"),
+        format!("  {}", style.command("openclaude serve")),
+        String::new(),
+        style.heading("Commands:"),
+        command_line(style, "help", "print the detailed help page"),
+        String::new(),
+        command_line(
+            style,
+            "reference",
+            "refresh the optional local opencode checkout",
+        ),
+        String::new(),
+        command_line(
+            style,
+            "serve",
+            "start the HTTP server; primary integration command",
+        ),
+        String::new(),
+        command_line(style, "stdio", "start the stdio bridge explicitly"),
+        String::new(),
+        style.heading("Options:"),
+        option_line(
+            style,
+            "--provider-id <PROVIDER_ID>",
+            "[env: OPENCLAUDE_PROVIDER_ID=] [default: openclaude]",
+        ),
+        String::new(),
+        option_line(
+            style,
+            "--default-model <DEFAULT_MODEL>",
+            "[env: OPENCLAUDE_MODEL=] [default: sonnet]",
+        ),
+        String::new(),
+        option_line(
+            style,
+            "--claude-bin <CLAUDE_BIN>",
+            "[env: OPENCLAUDE_CLAUDE_BIN=] [default: claude]",
+        ),
+        String::new(),
+        option_line(
+            style,
+            "--workdir <WORKDIR>",
+            "[env: OPENCLAUDE_WORKDIR=] [default: /tmp/openclaude]",
+        ),
+        String::new(),
+        option_line(style, "-h, --help", "print help"),
+    ]
+    .join("\n")
+}
 
-  -h, --help
-      print help"#;
+pub fn detailed_help(color: bool) -> String {
+    let style = if color && env::var_os("NO_COLOR").is_none() {
+        HelpStyle::color()
+    } else {
+        HelpStyle::plain()
+    };
 
-pub fn detailed_help() -> String {
-    DETAILED_HELP_GUIDE.to_string()
+    render_detailed_help(style)
 }
 
 #[cfg(test)]
@@ -83,7 +157,7 @@ mod tests {
 
     #[test]
     fn detailed_help_mentions_explicit_commands() {
-        let help = detailed_help();
+        let help = detailed_help(false);
 
         assert!(help.contains("Usage:"));
         assert!(help.contains("Example:"));
@@ -91,6 +165,13 @@ mod tests {
         assert!(help.contains("  stdio\n      start the stdio bridge explicitly"));
         assert!(help.contains("primary integration command"));
         assert!(!help.contains("quick guide"));
+    }
+
+    #[test]
+    fn detailed_help_adds_ansi_when_enabled() {
+        let help = detailed_help(true);
+
+        assert!(help.contains("\x1b["));
     }
 
     #[test]
