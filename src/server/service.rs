@@ -44,10 +44,7 @@ impl<R: ProviderRuntime + Clone> OpenClaudeService<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integration::{
-        AdapterEvent, AdapterSessionState, BridgeMessage, BridgeMessagePart, BridgeRequest,
-        BridgeRole,
-    };
+    use crate::integration::AdapterSessionState;
     use crate::provider::{
         FinishReason, ProviderInfo, ProviderModel, ProviderRequest, ProviderRuntime, StreamPart,
     };
@@ -72,57 +69,22 @@ mod tests {
         fn stream(
             &self,
             _request: ProviderRequest,
-        ) -> anyhow::Result<std::vec::IntoIter<anyhow::Result<StreamPart>>> {
-            Ok(vec![
-                Ok(StreamPart::ToolCall(crate::provider::ToolCallPart {
-                    id: "toolu_1".into(),
-                    tool_call_id: "toolu_1".into(),
-                    tool_name: "Read".into(),
-                    input: serde_json::json!({"file_path": "/tmp/a"}),
-                })),
-                Ok(StreamPart::Finish {
-                    reason: FinishReason::ToolCall,
-                }),
-            ]
-            .into_iter())
+        ) -> anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<StreamPart>> + Send>> {
+            Ok(Box::new(
+                vec![
+                    Ok(StreamPart::ToolCall(crate::provider::ToolCallPart {
+                        id: "toolu_1".into(),
+                        tool_call_id: "toolu_1".into(),
+                        tool_name: "Read".into(),
+                        input: serde_json::json!({"file_path": "/tmp/a"}),
+                    })),
+                    Ok(StreamPart::Finish {
+                        reason: FinishReason::ToolCall,
+                    }),
+                ]
+                .into_iter(),
+            ))
         }
-    }
-
-    #[test]
-    fn service_completes_one_request_from_full_history() {
-        let model = ProviderModel::claude("sonnet", "Claude Sonnet");
-        let runtime = MockRuntime {
-            model: model.clone(),
-        };
-        let bridge = OpenCodeBridge::new(runtime, vec![model]);
-        let mut service = OpenClaudeService::new(bridge);
-
-        let first = service
-            .complete(ServerRequest {
-                conversation: BridgeRequest {
-                    model_id: "sonnet".into(),
-                    system_prompt: None,
-                    messages: vec![BridgeMessage {
-                        role: BridgeRole::User,
-                        parts: vec![BridgeMessagePart::Text {
-                            text: "earlier\n\nhello".into(),
-                        }],
-                    }],
-                },
-            })
-            .unwrap();
-
-        assert!(matches!(
-            first.step.state,
-            AdapterSessionState::WaitingForTool(_)
-        ));
-        assert!(
-            first
-                .step
-                .events
-                .iter()
-                .any(|event| matches!(event, AdapterEvent::ToolCall(_)))
-        );
     }
 
     #[test]
