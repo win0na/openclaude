@@ -38,7 +38,7 @@ If the change affects OpenCode integration knowledge, update `docs/OPENCODE_REFE
 
 `openclaude` is a translation layer between OpenCode and Claude Code. It uses a plugin-based frontend and a native translation backend so OpenCode can preserve its own tooling, orchestration, and rendering semantics while Claude Code remains the model-facing transport.
 
-The purpose of this project is to fit more cleanly within anthropic's guidelines for model usage outside of Claude Code. This project is not an OpenAI-compatible shim; it is a provider-focused translation backend that should model OpenCode's native stream parts and session expectations as closely as possible.
+The purpose of this project is to fit more cleanly within Anthropic's guidelines for model usage outside of Claude Code. This project is not an OpenAI-compatible shim; it is a provider-focused translation backend that should model OpenCode's native stream parts and session expectations as closely as possible.
 
 Current plugin research indicates that provider routing should live in OpenCode configuration, while the plugin should remain a thin frontend for auth, headers, params, and transforms. Do not assume a plugin can register a brand-new provider runtime by itself.
 
@@ -109,7 +109,7 @@ openclaude/
 │   ├── claude/
 │   │   ├── mod.rs             # Claude CLI transport facade
 │   │   ├── cli.rs             # process spawning and argument building
-│   │   └── stream.rs          # Claude stream-json parsing
+│   │   └── stream.rs          # Claude stream-JSON parsing
 │   └── integration/
 │       └── opencode.rs        # integration targets that should stay aligned with docs/OPENCODE_REFERENCE.md
 ```
@@ -132,8 +132,11 @@ openclaude/
 
 ## Human-Readable Text Style
 
-- In human-readable prose across project files, prefer lowercase text by default
-- Only use uppercase letters when necessary, such as proper nouns, language names, file formats, environment variables, or code-identifiers that require exact casing
+- In human-readable prose across project files, use normal English capitalization and punctuation by default
+- For terminal-facing strings such as console logs, help text, and similar CLI output, prefer the lowercase style previously used in this project
+- Keep acronyms capitalized in both prose and terminal-facing strings
+- Preserve exact casing for language names, file formats, environment variables, code identifiers, and other literals that require it
+- Always write the project name as `openclaude`, not `OpenClaude`
 
 ## OMO / Oh-My-Opencode
 
