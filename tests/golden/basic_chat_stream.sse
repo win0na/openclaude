@@ -1,0 +1,7 @@
+data: {"choices":[{"delta":{"role":"assistant"},"index":0}],"created":0,"id":"CHATCMPL_ID","model":"MODEL","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"content":"hello from fake claude"},"index":0}],"created":0,"id":"CHATCMPL_ID","model":"MODEL","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop","index":0}],"created":0,"id":"CHATCMPL_ID","model":"MODEL","object":"chat.completion.chunk"}
+
+data: [DONE]
