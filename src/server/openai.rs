@@ -16,7 +16,7 @@ pub struct ChatRequest {
     #[serde(default)]
     pub tools: Vec<ChatTool>,
     #[serde(default)]
-    pub tool_choice: Option<ChatToolChoice>,
+    pub tool_choice: Option<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -90,29 +90,6 @@ pub struct ChatFunction {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub parameters: Value,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum ChatToolChoice {
-    Mode(ChatToolChoiceMode),
-    Function(ChatNamedToolChoice),
-    Other(Value),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ChatToolChoiceMode {
-    Auto,
-    None,
-    Required,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ChatNamedToolChoice {
-    #[serde(rename = "type")]
-    pub tool_type: ChatToolType,
-    pub function: ChatFunctionChoice,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -243,10 +220,7 @@ mod tests {
         }"#;
 
         let request: ChatRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(
-            request.tool_choice,
-            Some(ChatToolChoice::Mode(ChatToolChoiceMode::Auto))
-        );
+        assert_eq!(request.tool_choice, Some(serde_json::json!("auto")));
     }
 
     #[test]
@@ -265,11 +239,9 @@ mod tests {
         let request: ChatRequest = serde_json::from_str(json).unwrap();
         assert_eq!(
             request.tool_choice,
-            Some(ChatToolChoice::Function(ChatNamedToolChoice {
-                tool_type: ChatToolType::Function,
-                function: ChatFunctionChoice {
-                    name: "Read".into(),
-                },
+            Some(serde_json::json!({
+                "type": "function",
+                "function": {"name": "Read"}
             }))
         );
     }
@@ -289,7 +261,7 @@ mod tests {
         let request: ChatRequest = serde_json::from_str(json).unwrap();
         assert_eq!(
             request.tool_choice,
-            Some(ChatToolChoice::Other(serde_json::json!({ "type": "auto" })))
+            Some(serde_json::json!({ "type": "auto" }))
         );
     }
 
@@ -309,10 +281,10 @@ mod tests {
         let request: ChatRequest = serde_json::from_str(json).unwrap();
         assert_eq!(
             request.tool_choice,
-            Some(ChatToolChoice::Other(serde_json::json!({
+            Some(serde_json::json!({
                 "type": "custom_mode",
                 "tool_name": "Read"
-            })))
+            }))
         );
     }
 
