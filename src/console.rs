@@ -28,7 +28,7 @@ impl Style {
     }
 
     pub fn heading(self, text: &str) -> String {
-        self.paint(text, "1;94")
+        self.paint(text, "1")
     }
 
     pub fn command(self, text: &str) -> String {
