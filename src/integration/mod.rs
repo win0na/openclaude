@@ -3,4 +3,4 @@ pub mod bridge;
 pub mod opencode;
 
 pub use adapter::{AdapterEvent, AdapterSessionState, AdapterStep, OpenCodeAdapter};
-pub use bridge::{BridgeMessage, BridgeRequest, BridgeRole, BridgeToolResult, OpenCodeBridge};
+pub use bridge::{BridgeMessage, BridgeRequest, BridgeRole, OpenCodeBridge};

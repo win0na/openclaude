@@ -1,6 +1,5 @@
 use crate::provider::{
     ProviderRuntime, ProviderSession, SessionState, SessionStep, StreamPart, ToolCallPart,
-    ToolResult,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -59,11 +58,6 @@ impl<R: ProviderRuntime> OpenCodeAdapter<R> {
         request: crate::provider::ProviderRequest,
     ) -> anyhow::Result<AdapterStep> {
         let step = self.session.start(request)?;
-        Ok(map_session_step(step))
-    }
-
-    pub fn submit_tool_result(&mut self, result: ToolResult) -> anyhow::Result<AdapterStep> {
-        let step = self.session.submit_tool_result(result)?;
         Ok(map_session_step(step))
     }
 }

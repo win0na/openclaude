@@ -1,10 +1,8 @@
 use crate::integration::{AdapterStep, OpenCodeAdapter};
 use crate::provider::{
     MessageRole, ProviderInfo, ProviderMessage, ProviderModel, ProviderRequest, ProviderRuntime,
-    ToolResult,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,13 +25,6 @@ pub struct BridgeRequest {
     pub system_prompt: Option<String>,
     pub prompt: String,
     pub messages: Vec<BridgeMessage>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BridgeToolResult {
-    pub call_id: String,
-    pub tool_name: Option<String>,
-    pub output: Value,
 }
 
 #[derive(Clone)]
@@ -68,14 +59,6 @@ impl<R: ProviderRuntime> OpenCodeBridge<R> {
 
     pub fn start(&mut self, request: BridgeRequest) -> anyhow::Result<AdapterStep> {
         self.adapter.start(self.to_provider_request(request)?)
-    }
-
-    pub fn submit_tool_result(&mut self, result: BridgeToolResult) -> anyhow::Result<AdapterStep> {
-        self.adapter.submit_tool_result(ToolResult {
-            call_id: result.call_id,
-            tool_name: result.tool_name,
-            output: result.output,
-        })
     }
 
     fn to_provider_request(&self, request: BridgeRequest) -> anyhow::Result<ProviderRequest> {

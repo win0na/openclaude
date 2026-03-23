@@ -6,9 +6,7 @@ pub mod stream;
 
 pub use catalog::{default_model, default_models};
 pub use model::{ModelCapability, ProviderModel};
-pub use runtime::{
-    MessageRole, ProviderInfo, ProviderMessage, ProviderRequest, ProviderRuntime, ToolResult,
-};
+pub use runtime::{MessageRole, ProviderInfo, ProviderMessage, ProviderRequest, ProviderRuntime};
 pub use session::{ProviderSession, SessionState, SessionStep};
 pub use stream::{
     FinishReason, ReasoningPart, StreamPart, TextPart, ToolCallPart, ToolInputDeltaPart,

@@ -1,30 +1,20 @@
 use crate::claude::cli::ClaudeCli;
 use crate::claude::prompt::build_claude_prompt;
-use crate::claude::result::format_tool_result;
 use crate::claude::stream::ClaudeChunk;
 use crate::claude::translate::ClaudeTranslator;
 use crate::provider::{
-    FinishReason, MessageRole, ProviderInfo, ProviderMessage, ProviderModel, ProviderRequest,
-    ProviderRuntime, StreamPart, ToolCallPart, ToolResult,
+    FinishReason, ProviderInfo, ProviderModel, ProviderRequest, ProviderRuntime, StreamPart,
 };
 use anyhow::Context;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
-
-#[derive(Debug, Clone)]
-struct SuspendedToolSession {
-    request: ProviderRequest,
-    tool_call: ToolCallPart,
-}
 
 #[derive(Clone)]
 pub struct ClaudeCliRuntime {
     info: ProviderInfo,
     cli: ClaudeCli,
     models: Vec<ProviderModel>,
-    suspended: Arc<Mutex<std::collections::HashMap<String, SuspendedToolSession>>>,
 }
 
 impl ClaudeCliRuntime {
@@ -36,7 +26,6 @@ impl ClaudeCliRuntime {
             },
             cli: ClaudeCli::new(binary),
             models,
-            suspended: Arc::new(Mutex::new(std::collections::HashMap::new())),
         }
     }
 
@@ -51,54 +40,6 @@ impl ClaudeCliRuntime {
             serde_json::from_str(line).context("failed to parse Claude stream line")?;
         let mut translator = ClaudeTranslator::new();
         Ok(translator.push_chunk(&chunk))
-    }
-
-    fn remember_suspended_tool_call(&self, request: &ProviderRequest, tool_call: &ToolCallPart) {
-        let session = SuspendedToolSession {
-            request: request.clone(),
-            tool_call: tool_call.clone(),
-        };
-        if let Ok(mut suspended) = self.suspended.lock() {
-            suspended.insert(tool_call.tool_call_id.clone(), session);
-        }
-    }
-
-    fn build_continuation_request(
-        &self,
-        session: SuspendedToolSession,
-        result: ToolResult,
-    ) -> anyhow::Result<ProviderRequest> {
-        let mut messages = session.request.messages.clone();
-
-        if !session.request.prompt.trim().is_empty() {
-            messages.push(ProviderMessage {
-                role: MessageRole::User,
-                content: session.request.prompt.clone(),
-            });
-        }
-
-        messages.push(ProviderMessage {
-            role: MessageRole::Assistant,
-            content: format!(
-                "tool call issued: {} ({})",
-                result
-                    .tool_name
-                    .clone()
-                    .unwrap_or_else(|| session.tool_call.tool_name.clone()),
-                session.tool_call.tool_call_id
-            ),
-        });
-        messages.push(ProviderMessage {
-            role: MessageRole::Tool,
-            content: format_tool_result(&result)?,
-        });
-
-        Ok(ProviderRequest {
-            model: session.request.model,
-            system_prompt: session.request.system_prompt,
-            prompt: "continue from the tool result above".into(),
-            messages,
-        })
     }
 }
 
@@ -160,13 +101,7 @@ impl ProviderRuntime for ClaudeCliRuntime {
         for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
             let chunk: ClaudeChunk = serde_json::from_str(line)
                 .with_context(|| format!("failed to parse Claude stream line: {line}"))?;
-            let translated = translator.push_chunk(&chunk);
-            for part in &translated {
-                if let StreamPart::ToolCall(tool_call) = part {
-                    self.remember_suspended_tool_call(&request, tool_call);
-                }
-            }
-            output.extend(translated.into_iter().map(Ok));
+            output.extend(translator.push_chunk(&chunk).into_iter().map(Ok));
         }
 
         output.push(Ok(StreamPart::Finish {
@@ -174,27 +109,12 @@ impl ProviderRuntime for ClaudeCliRuntime {
         }));
         Ok(output.into_iter())
     }
-
-    fn submit_tool_result(&self, result: ToolResult) -> anyhow::Result<Option<ProviderRequest>> {
-        let session = self
-            .suspended
-            .lock()
-            .map_err(|_| anyhow::anyhow!("suspended session mutex poisoned"))?
-            .remove(&result.call_id);
-
-        let Some(session) = session else {
-            return Ok(None);
-        };
-
-        Ok(Some(self.build_continuation_request(session, result)?))
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::provider::{MessageRole, ProviderMessage, StreamPart};
-    use serde_json::json;
     use std::fs;
     use tempfile::tempdir;
 
@@ -265,50 +185,5 @@ mod tests {
                 reason: FinishReason::EndTurn
             })
         ));
-    }
-
-    #[test]
-    fn submit_tool_result_builds_continuation_request() {
-        let runtime = ClaudeCliRuntime::new(
-            "claude",
-            vec![ProviderModel::claude("sonnet", "Claude Sonnet")],
-        );
-        let request = ProviderRequest {
-            model: ProviderModel::claude("sonnet", "Claude Sonnet"),
-            system_prompt: Some("system".into()),
-            prompt: "latest question".into(),
-            messages: vec![ProviderMessage {
-                role: MessageRole::User,
-                content: "earlier".into(),
-            }],
-        };
-
-        runtime.remember_suspended_tool_call(
-            &request,
-            &ToolCallPart {
-                id: "toolu_1".into(),
-                tool_call_id: "toolu_1".into(),
-                tool_name: "Read".into(),
-                input: json!({"file_path": "/tmp/a"}),
-            },
-        );
-
-        let continuation = runtime
-            .submit_tool_result(ToolResult {
-                call_id: "toolu_1".into(),
-                tool_name: None,
-                output: json!({"content": "file body"}),
-            })
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(continuation.system_prompt.as_deref(), Some("system"));
-        assert_eq!(continuation.prompt, "continue from the tool result above");
-        assert!(
-            continuation
-                .messages
-                .iter()
-                .any(|msg| msg.role == MessageRole::Tool)
-        );
     }
 }
