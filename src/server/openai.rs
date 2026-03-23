@@ -43,6 +43,7 @@ pub enum ChatRole {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ChatContent {
+    Null,
     Text(String),
     Parts(Vec<ChatContentPart>),
 }
@@ -50,6 +51,7 @@ pub enum ChatContent {
 impl ChatContent {
     pub fn as_text(&self) -> Option<&str> {
         match self {
+            ChatContent::Null => None,
             ChatContent::Text(s) => Some(s),
             ChatContent::Parts(parts) => parts.iter().find_map(|p| match p {
                 ChatContentPart::Text { text } => Some(text.as_str()),
@@ -169,6 +171,8 @@ pub struct ChatToolCallDelta {
     pub index: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+    pub call_type: Option<ChatToolType>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function: Option<ChatFunctionCallDelta>,
 }

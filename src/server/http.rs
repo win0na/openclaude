@@ -6,7 +6,7 @@ use crate::provider::ProviderRuntime;
 use crate::server::openai::{
     ChatChoice, ChatChunk, ChatChunkChoice, ChatContent, ChatDelta, ChatFunctionCall,
     ChatFunctionCallDelta, ChatMessage, ChatRequest, ChatResponse, ChatRole, ChatToolCall,
-    ChatToolCallDelta, ChatToolType, ChatUsage, format_sse, format_sse_done,
+    ChatToolCallDelta, ChatToolType, ChatUsage,
 };
 use axum::{
     Json, Router,
@@ -16,13 +16,13 @@ use axum::{
     routing::{get, post},
 };
 use futures::Stream;
-use futures::stream;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, mpsc};
+use tokio_stream::wrappers::ReceiverStream;
 use tower_http::cors::{Any, CorsLayer};
-use tracing::info;
+use tracing::{error, info};
 use uuid::Uuid;
 
 pub struct HttpState<R: ProviderRuntime + Clone + Send + Sync + 'static> {
@@ -95,27 +95,45 @@ async fn chat_completions<R: ProviderRuntime + Clone + Send + Sync + 'static>(
         }
     };
 
-    let mut bridge = state.bridge.write().await;
-    let step = match bridge.start(bridge_request) {
-        Ok(step) => step,
-        Err(err) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": {
-                        "message": err.to_string(),
-                        "type": "internal_error"
-                    }
-                })),
-            )
-                .into_response();
-        }
-    };
-
     if request.stream {
-        let stream = stream_chat_response(request.model, step);
+        let bridge = state.bridge.read().await;
+        let events = match bridge.stream_events(bridge_request) {
+            Ok(events) => events,
+            Err(err) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": {
+                            "message": err.to_string(),
+                            "type": "internal_error"
+                        }
+                    })),
+                )
+                    .into_response();
+            }
+        };
+        drop(bridge);
+
+        let stream = stream_chat_response(request.model, events);
         Sse::new(stream).into_response()
     } else {
+        let mut bridge = state.bridge.write().await;
+        let step = match bridge.start(bridge_request) {
+            Ok(step) => step,
+            Err(err) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": {
+                            "message": err.to_string(),
+                            "type": "internal_error"
+                        }
+                    })),
+                )
+                    .into_response();
+            }
+        };
+
         let response = build_chat_response(request.model, step);
         Json(response).into_response()
     }
@@ -141,6 +159,7 @@ fn to_bridge_request(request: &ChatRequest) -> Result<BridgeRequest, String> {
             };
 
             let parts = match &m.content {
+                ChatContent::Null => Vec::new(),
                 ChatContent::Text(text) => vec![BridgeMessagePart::Text { text: text.clone() }],
                 ChatContent::Parts(parts) => parts
                     .iter()
@@ -152,6 +171,16 @@ fn to_bridge_request(request: &ChatRequest) -> Result<BridgeRequest, String> {
                     })
                     .collect(),
             };
+
+            let mut parts = parts;
+            if let Some(tool_calls) = &m.tool_calls {
+                parts.extend(tool_calls.iter().map(|call| BridgeMessagePart::ToolCall {
+                    call_id: call.id.clone(),
+                    tool_name: call.function.name.clone(),
+                    input: serde_json::from_str(&call.function.arguments)
+                        .unwrap_or_else(|_| serde_json::json!({ "arguments": call.function.arguments })),
+                }));
+            }
 
             BridgeMessage { role, parts }
         })
@@ -185,7 +214,11 @@ fn build_chat_response(model: String, step: AdapterStep) -> ChatResponse {
             index: 0,
             message: ChatMessage {
                 role: ChatRole::Assistant,
-                content: ChatContent::Text(content),
+                content: if content.is_empty() && !tool_calls.is_empty() {
+                    ChatContent::Null
+                } else {
+                    ChatContent::Text(content)
+                },
                 name: None,
                 tool_call_id: None,
                 tool_calls: if tool_calls.is_empty() {
@@ -246,7 +279,7 @@ fn extract_response_parts(step: AdapterStep) -> (String, Vec<ChatToolCall>, Opti
                 });
             }
             AdapterEvent::Finish { reason } => {
-                finish_reason = Some(reason);
+                finish_reason = Some(map_finish_reason(&reason).to_string());
             }
             _ => {}
         }
@@ -269,7 +302,7 @@ fn extract_response_parts(step: AdapterStep) -> (String, Vec<ChatToolCall>, Opti
 
 fn stream_chat_response(
     model: String,
-    step: AdapterStep,
+    events: Box<dyn Iterator<Item = anyhow::Result<AdapterEvent>> + Send>,
 ) -> impl Stream<Item = Result<Event, axum::Error>> {
     let id = format!("chatcmpl-{}", Uuid::new_v4());
     let created = SystemTime::now()
@@ -277,77 +310,118 @@ fn stream_chat_response(
         .unwrap()
         .as_secs();
 
-    let chunks = build_stream_chunks(id, created, model, step);
-    stream::iter(chunks.into_iter().map(|s| Ok(Event::default().data(s))))
+    let (tx, rx) = mpsc::channel(64);
+    std::thread::spawn(move || {
+        let mut state = StreamResponseState::new(id, created, model);
+        let _ = tx.blocking_send(Ok(Event::default().data(make_role_chunk(
+            &state.id,
+            state.created,
+            &state.model,
+        ))));
+
+        for event in events {
+            match event {
+                Ok(event) => {
+                    for chunk in state.push(event) {
+                        if tx.blocking_send(Ok(Event::default().data(chunk))).is_err() {
+                            return;
+                        }
+                    }
+                }
+                Err(err) => {
+                    error!(error = %err, "streaming response failed");
+                    let _ = tx.blocking_send(Ok(Event::default().data(make_finish_chunk(
+                        &state.id,
+                        state.created,
+                        &state.model,
+                        "error",
+                    ))));
+                    let _ = tx.blocking_send(Err(axum::Error::new(err)));
+                    return;
+                }
+            }
+        }
+
+        let _ = tx.blocking_send(Ok(Event::default().data("[DONE]")));
+    });
+
+    ReceiverStream::new(rx)
 }
 
-fn build_stream_chunks(id: String, created: u64, model: String, step: AdapterStep) -> Vec<String> {
-    let mut chunks = Vec::new();
+struct StreamResponseState {
+    id: String,
+    created: u64,
+    model: String,
+    tool_call_index: u32,
+    saw_tool_call: bool,
+    tool_call_buffers: HashMap<String, (u32, String, String)>,
+}
 
-    chunks.push(make_role_chunk(&id, created, &model));
-
-    let mut tool_call_index: u32 = 0;
-    let mut tool_call_buffers: HashMap<String, (u32, String, String)> = HashMap::new();
-
-    for event in step.events {
-        match event {
-            AdapterEvent::TextDelta { delta, .. } => {
-                chunks.push(make_content_chunk(&id, created, &model, &delta));
-            }
-            AdapterEvent::ToolInputStart {
-                id: tool_id,
-                tool_name,
-            } => {
-                let idx = tool_call_index;
-                tool_call_index += 1;
-                tool_call_buffers.insert(tool_id.clone(), (idx, tool_name, String::new()));
-                chunks.push(make_tool_start_chunk(&id, created, &model, idx, &tool_id));
-            }
-            AdapterEvent::ToolInputDelta { id: tool_id, delta } => {
-                if let Some((idx, _name, args)) = tool_call_buffers.get_mut(&tool_id) {
-                    args.push_str(&delta);
-                    chunks.push(make_tool_args_chunk(&id, created, &model, *idx, &delta));
-                }
-            }
-            AdapterEvent::ToolInputEnd { id: tool_id } => {
-                if let Some((idx, name, _args)) = tool_call_buffers.remove(&tool_id) {
-                    chunks.push(make_tool_name_chunk(&id, created, &model, idx, &name));
-                }
-            }
-            AdapterEvent::ToolCall(call) => {
-                let idx = tool_call_index;
-                tool_call_index += 1;
-                chunks.push(make_tool_start_chunk(
-                    &id,
-                    created,
-                    &model,
-                    idx,
-                    &call.call_id,
-                ));
-                chunks.push(make_tool_name_chunk(
-                    &id,
-                    created,
-                    &model,
-                    idx,
-                    &call.tool_name,
-                ));
-                chunks.push(make_tool_args_chunk(
-                    &id,
-                    created,
-                    &model,
-                    idx,
-                    &call.input.to_string(),
-                ));
-            }
-            AdapterEvent::Finish { reason } => {
-                chunks.push(make_finish_chunk(&id, created, &model, &reason));
-            }
-            _ => {}
+impl StreamResponseState {
+    fn new(id: String, created: u64, model: String) -> Self {
+        Self {
+            id,
+            created,
+            model,
+            tool_call_index: 0,
+            saw_tool_call: false,
+            tool_call_buffers: HashMap::new(),
         }
     }
 
-    chunks.push(format_sse_done());
-    chunks
+    fn push(&mut self, event: AdapterEvent) -> Vec<String> {
+        match event {
+            AdapterEvent::TextDelta { delta, .. } => {
+                vec![make_content_chunk(&self.id, self.created, &self.model, &delta)]
+            }
+            AdapterEvent::ToolInputStart { id, tool_name } => {
+                self.saw_tool_call = true;
+                let idx = self.tool_call_index;
+                self.tool_call_index += 1;
+                self.tool_call_buffers
+                    .insert(id.clone(), (idx, tool_name.clone(), String::new()));
+                vec![make_tool_start_with_name_chunk(
+                    &self.id,
+                    self.created,
+                    &self.model,
+                    idx,
+                    &id,
+                    &tool_name,
+                )]
+            }
+            AdapterEvent::ToolInputDelta { id, delta } => {
+                if let Some((idx, _name, args)) = self.tool_call_buffers.get_mut(&id) {
+                    args.push_str(&delta);
+                    vec![make_tool_args_chunk(
+                        &self.id,
+                        self.created,
+                        &self.model,
+                        *idx,
+                        &delta,
+                    )]
+                } else {
+                    Vec::new()
+                }
+            }
+            AdapterEvent::ToolInputEnd { id } => {
+                if self.tool_call_buffers.remove(&id).is_some() {
+                    Vec::new()
+                } else {
+                    Vec::new()
+                }
+            }
+            AdapterEvent::ToolCall(_) => Vec::new(),
+            AdapterEvent::Finish { reason } => {
+                let mapped = if self.saw_tool_call && reason == "end_turn" {
+                    "tool_call"
+                } else {
+                    &reason
+                };
+                vec![make_finish_chunk(&self.id, self.created, &self.model, mapped)]
+            }
+            _ => Vec::new(),
+        }
+    }
 }
 
 fn make_role_chunk(id: &str, created: u64, model: &str) -> String {
@@ -366,7 +440,7 @@ fn make_role_chunk(id: &str, created: u64, model: &str) -> String {
             finish_reason: None,
         }],
     };
-    format_sse(&serde_json::to_string(&chunk).unwrap())
+    serde_json::to_string(&chunk).unwrap()
 }
 
 fn make_content_chunk(id: &str, created: u64, model: &str, content: &str) -> String {
@@ -385,10 +459,39 @@ fn make_content_chunk(id: &str, created: u64, model: &str, content: &str) -> Str
             finish_reason: None,
         }],
     };
-    format_sse(&serde_json::to_string(&chunk).unwrap())
+    serde_json::to_string(&chunk).unwrap()
 }
 
-fn make_tool_start_chunk(id: &str, created: u64, model: &str, index: u32, tool_id: &str) -> String {
+fn make_tool_start_with_name_chunk(
+    id: &str,
+    created: u64,
+    model: &str,
+    index: u32,
+    tool_id: &str,
+    name: &str,
+) -> String {
+    make_tool_chunk(
+        id,
+        created,
+        model,
+        index,
+        Some(tool_id.into()),
+        Some(ChatToolType::Function),
+        Some(name.into()),
+        None,
+    )
+}
+
+fn make_tool_chunk(
+    id: &str,
+    created: u64,
+    model: &str,
+    index: u32,
+    tool_id: Option<String>,
+    call_type: Option<ChatToolType>,
+    name: Option<String>,
+    arguments: Option<String>,
+) -> String {
     let chunk = ChatChunk {
         id: id.into(),
         object: "chat.completion.chunk".into(),
@@ -401,66 +504,31 @@ fn make_tool_start_chunk(id: &str, created: u64, model: &str, index: u32, tool_i
                 content: None,
                 tool_calls: Some(vec![ChatToolCallDelta {
                     index,
-                    id: Some(tool_id.into()),
-                    function: None,
+                    id: tool_id,
+                    call_type,
+                    function: match (name, arguments) {
+                        (None, None) => None,
+                        (name, arguments) => Some(ChatFunctionCallDelta { name, arguments }),
+                    },
                 }]),
             },
             finish_reason: None,
         }],
     };
-    format_sse(&serde_json::to_string(&chunk).unwrap())
-}
-
-fn make_tool_name_chunk(id: &str, created: u64, model: &str, index: u32, name: &str) -> String {
-    let chunk = ChatChunk {
-        id: id.into(),
-        object: "chat.completion.chunk".into(),
-        created,
-        model: model.into(),
-        choices: vec![ChatChunkChoice {
-            index: 0,
-            delta: ChatDelta {
-                role: None,
-                content: None,
-                tool_calls: Some(vec![ChatToolCallDelta {
-                    index,
-                    id: None,
-                    function: Some(ChatFunctionCallDelta {
-                        name: Some(name.into()),
-                        arguments: None,
-                    }),
-                }]),
-            },
-            finish_reason: None,
-        }],
-    };
-    format_sse(&serde_json::to_string(&chunk).unwrap())
+    serde_json::to_string(&chunk).unwrap()
 }
 
 fn make_tool_args_chunk(id: &str, created: u64, model: &str, index: u32, args: &str) -> String {
-    let chunk = ChatChunk {
-        id: id.into(),
-        object: "chat.completion.chunk".into(),
+    make_tool_chunk(
+        id,
         created,
-        model: model.into(),
-        choices: vec![ChatChunkChoice {
-            index: 0,
-            delta: ChatDelta {
-                role: None,
-                content: None,
-                tool_calls: Some(vec![ChatToolCallDelta {
-                    index,
-                    id: None,
-                    function: Some(ChatFunctionCallDelta {
-                        name: None,
-                        arguments: Some(args.into()),
-                    }),
-                }]),
-            },
-            finish_reason: None,
-        }],
-    };
-    format_sse(&serde_json::to_string(&chunk).unwrap())
+        model,
+        index,
+        None,
+        Some(ChatToolType::Function),
+        None,
+        Some(args.into()),
+    )
 }
 
 fn make_finish_chunk(id: &str, created: u64, model: &str, reason: &str) -> String {
@@ -476,10 +544,18 @@ fn make_finish_chunk(id: &str, created: u64, model: &str, reason: &str) -> Strin
                 content: None,
                 tool_calls: None,
             },
-            finish_reason: Some(reason.into()),
+            finish_reason: Some(map_finish_reason(reason).into()),
         }],
     };
-    format_sse(&serde_json::to_string(&chunk).unwrap())
+    serde_json::to_string(&chunk).unwrap()
+}
+
+fn map_finish_reason(reason: &str) -> &str {
+    match reason {
+        "end_turn" => "stop",
+        "tool_call" => "tool_calls",
+        other => other,
+    }
 }
 
 #[cfg(test)]
@@ -509,8 +585,8 @@ mod tests {
         fn stream(
             &self,
             _request: ProviderRequest,
-        ) -> anyhow::Result<std::vec::IntoIter<anyhow::Result<StreamPart>>> {
-            Ok(vec![
+        ) -> anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<StreamPart>> + Send>> {
+            Ok(Box::new(vec![
                 Ok(StreamPart::TextStart {
                     id: "part-0".into(),
                 }),
@@ -525,7 +601,7 @@ mod tests {
                     reason: crate::provider::FinishReason::EndTurn,
                 }),
             ]
-            .into_iter())
+            .into_iter()))
         }
     }
 
@@ -554,5 +630,73 @@ mod tests {
         assert!(
             matches!(response.choices[0].message.content, ChatContent::Text(ref s) if s == "hello")
         );
+        assert_eq!(response.choices[0].finish_reason.as_deref(), Some("stop"));
     }
+
+    #[test]
+    fn maps_internal_finish_reasons_to_openai_values() {
+        assert_eq!(map_finish_reason("end_turn"), "stop");
+        assert_eq!(map_finish_reason("tool_call"), "tool_calls");
+        assert_eq!(map_finish_reason("error"), "error");
+    }
+
+    #[test]
+    fn tool_start_chunk_includes_function_object_and_type() {
+        let json = make_tool_start_with_name_chunk("chatcmpl-1", 1, "opus", 0, "toolu_1", "Read");
+        let chunk: ChatChunk = serde_json::from_str(&json).unwrap();
+        let tool_call = chunk.choices[0].delta.tool_calls.as_ref().unwrap()[0].clone();
+
+        assert_eq!(tool_call.id.as_deref(), Some("toolu_1"));
+        assert_eq!(tool_call.call_type, Some(ChatToolType::Function));
+        assert_eq!(
+            tool_call.function,
+            Some(ChatFunctionCallDelta {
+                name: Some("Read".into()),
+                arguments: None,
+            })
+        );
+    }
+
+    #[test]
+    fn tool_args_chunk_never_emits_invalid_function_name() {
+        let json = make_tool_args_chunk("chatcmpl-1", 1, "opus", 0, r#"{"file_path":"/tmp/a"}"#);
+        let chunk: ChatChunk = serde_json::from_str(&json).unwrap();
+        let tool_call = chunk.choices[0].delta.tool_calls.as_ref().unwrap()[0].clone();
+
+        assert_eq!(tool_call.function.unwrap().name, None);
+    }
+
+    #[test]
+    fn bridge_request_preserves_assistant_tool_calls() {
+        let request = ChatRequest {
+            model: "sonnet".into(),
+            messages: vec![ChatMessage {
+                role: ChatRole::Assistant,
+                content: ChatContent::Null,
+                name: None,
+                tool_call_id: None,
+                tool_calls: Some(vec![ChatToolCall {
+                    id: "toolu_1".into(),
+                    call_type: ChatToolType::Function,
+                    function: ChatFunctionCall {
+                        name: "Read".into(),
+                        arguments: r#"{"file_path":"/tmp/a"}"#.into(),
+                    },
+                }]),
+            }],
+            stream: false,
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            tools: Vec::new(),
+            tool_choice: None,
+        };
+
+        let bridge = to_bridge_request(&request).unwrap();
+        assert!(matches!(
+            &bridge.messages[0].parts[0],
+            BridgeMessagePart::ToolCall { tool_name, .. } if tool_name == "Read"
+        ));
+    }
+
 }
