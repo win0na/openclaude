@@ -32,17 +32,17 @@ based on current plugin research, the plugin layer should not try to register a 
 - a thin plugin frontend for auth, headers, params, and message transforms
 - `openclaude` as the stateless native translation backend
 
-practical setup options for this project are:
-
-- a CLI bootstrap command that writes the provider entry into OpenCode config
-- plugin-managed config bootstrap that prepares the provider entry before use
-- reuse of an existing OpenAI-compatible provider slot that points at `openclaude`
-
 true dynamic provider registration from a plugin is not currently supported by the verified OpenCode code surface.
 
-the current plugin direction uses plugin-managed config bootstrap by ensuring a global provider entry exists in the user's OpenCode config before runtime request hooks are used.
+the current direction uses wrapper-managed bootstrap instead of editing user config.
 
-by default the plugin bootstraps `~/.config/opencode/opencode.jsonc` and ensures an `openclaude` provider with `haiku`, `sonnet`, and `opus` model entries points at `http://127.0.0.1:3000/v1`.
+when you run `openclaude`, it now:
+
+- prepares bootstrap config entries for the `openclaude` provider and plugin
+- merges them into the launched process through `OPENCODE_CONFIG_CONTENT`
+- starts `opencode` as a wrapper command replacement
+
+this keeps the user's normal `opencode` setup unchanged while making `openclaude` behave like a preconfigured entrypoint.
 
 ## status
 
@@ -85,11 +85,12 @@ The intended frontend lives in `plugin/` and should stay thin.
 Its job is to:
 
 - integrate with OpenCode's plugin hooks
-- ensure a global `openclaude` provider entry exists in OpenCode config
 - handle auth, headers, params, and message transforms
 - forward full history to the Rust backend
 
 It should not reimplement backend transport or session logic that already belongs in `openclaude`.
+
+The wrapper command is responsible for loading the plugin automatically.
 
 ## commands
 
@@ -97,7 +98,10 @@ It should not reimplement backend transport or session logic that already belong
 cargo fmt
 cargo test
 cargo build
-cargo run -- --help
+cargo run -- help
+cargo run --
+cargo run -- bootstrap -- run "hello"
+cargo run -- serve
 ```
 
 For the plugin scaffold:

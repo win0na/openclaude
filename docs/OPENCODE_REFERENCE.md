@@ -244,25 +244,23 @@ The practical implication is that `openclaude` should assume one of the followin
 
 ### supported setup options
 
-#### option 1: plugin-managed config bootstrap
+#### option 1: wrapper-managed bootstrap config
+
+`openclaude` can generate temporary bootstrap config for the launched `opencode` process without editing user files.
+
+- best fit for the current no-patch goal
+- keeps the plugin thin at runtime
+- keeps the user's normal `opencode` command unchanged
+- uses `OPENCODE_CONFIG_CONTENT` so OpenCode merges the bootstrap entries with existing config for that process only
+- current implementation target is provider id `openclaude` with `haiku`, `sonnet`, and `opus` model entries backed by `@ai-sdk/openai-compatible`
+
+#### option 2: plugin-managed config bootstrap
 
 The plugin can create or update the user's OpenCode config so the `openclaude` provider entry exists before chat starts.
 
-- best fit if we want the plugin to feel automatic
-- still config-backed under the hood
-- no OpenCode patching required
-- safest target is the global config file under `~/.config/opencode/`
-- if `opencode.jsonc` exists, preserve it and patch only the missing provider fields
-- if no global config exists, create `opencode.jsonc`
-- current implementation target is provider id `openclaude` with `haiku`, `sonnet`, and `opus` model entries backed by `@ai-sdk/openai-compatible`
-
-#### option 2: CLI bootstrap command
-
-`openclaude` can ship a command that writes the provider entry into OpenCode config.
-
-- safest implementation path
-- easiest to explain and test
-- plugin remains thin at runtime
+- still possible in principle
+- more invasive because it edits user config
+- no longer the preferred implementation direction in this repository
 
 #### option 3: reuse an existing OpenAI-compatible provider slot
 
@@ -284,12 +282,13 @@ OpenCode could eventually add a real plugin hook for provider registration.
 
 For the current repository, the best practical path is:
 
-1. keep `openclaude serve` as the runtime entrypoint
-2. add a bootstrap path that creates the provider config automatically
+1. keep `openclaude serve` as the backend runtime entrypoint
+2. make bare `openclaude` launch `opencode` with temporary bootstrap config
 3. keep the plugin focused on auth, headers, params, and transforms
-4. avoid designing around unsupported dynamic provider registration
+4. avoid editing user config by default
+5. avoid designing around unsupported dynamic provider registration
 
-The current implementation direction is plugin-managed global config bootstrap.
+The current implementation direction is wrapper-managed bootstrap config plus automatic plugin loading.
 
 ## current backend contract expectations
 
