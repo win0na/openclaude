@@ -6,9 +6,12 @@ use crate::provider::{
     FinishReason, ProviderInfo, ProviderModel, ProviderRequest, ProviderRuntime, StreamPart,
 };
 use anyhow::Context;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use tracing::error;
 
 #[derive(Clone)]
 pub struct ClaudeCliRuntime {
@@ -55,8 +58,7 @@ impl ProviderRuntime for ClaudeCliRuntime {
     fn stream(
         &self,
         request: ProviderRequest,
-    ) -> anyhow::Result<std::vec::IntoIter<anyhow::Result<StreamPart>>> {
-        let mut output = vec![Ok(StreamPart::Start)];
+    ) -> anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<StreamPart>> + Send>> {
         let prompt = build_claude_prompt(&request);
 
         let mut child = Command::new(self.cli.binary())
@@ -67,47 +69,93 @@ impl ProviderRuntime for ClaudeCliRuntime {
             .spawn()
             .context("failed to spawn Claude CLI")?;
 
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(prompt.user_prompt.as_bytes())
-                .context("failed to write prompt to Claude stdin")?;
-        }
+        let stdin = child.stdin.take();
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
+        let (tx, rx) = mpsc::channel::<anyhow::Result<StreamPart>>();
 
-        let completed = child
-            .wait_with_output()
-            .context("failed to wait for Claude CLI output")?;
+        thread::spawn(move || {
+            let _ = tx.send(Ok(StreamPart::Start));
 
-        if !completed.status.success() {
-            let stderr = String::from_utf8_lossy(&completed.stderr)
-                .trim()
-                .to_string();
-            output.push(Ok(StreamPart::Error {
-                message: if stderr.is_empty() {
-                    format!("Claude CLI exited with status {}", completed.status)
-                } else {
-                    stderr
-                },
-            }));
-            output.push(Ok(StreamPart::Finish {
-                reason: FinishReason::Error,
-            }));
-            return Ok(output.into_iter());
-        }
+            let stderr_handle = stderr.map(|stderr| {
+                thread::spawn(move || {
+                    let mut stderr = BufReader::new(stderr);
+                    let mut text = String::new();
+                    let _ = stderr.read_to_string(&mut text);
+                    text
+                })
+            });
 
-        let stdout =
-            String::from_utf8(completed.stdout).context("Claude stdout was not valid UTF-8")?;
-        let mut translator = ClaudeTranslator::new();
+            let result: anyhow::Result<()> = (|| {
+                if let Some(mut stdin) = stdin {
+                    stdin
+                        .write_all(prompt.user_prompt.as_bytes())
+                        .context("failed to write prompt to Claude stdin")?;
+                    drop(stdin);
+                }
 
-        for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
-            let chunk: ClaudeChunk = serde_json::from_str(line)
-                .with_context(|| format!("failed to parse Claude stream line: {line}"))?;
-            output.extend(translator.push_chunk(&chunk).into_iter().map(Ok));
-        }
+                let stdout = stdout.context("Claude stdout was not piped")?;
+                let mut reader = BufReader::new(stdout);
+                let mut translator = ClaudeTranslator::new();
+                let mut line = String::new();
 
-        output.push(Ok(StreamPart::Finish {
-            reason: FinishReason::EndTurn,
-        }));
-        Ok(output.into_iter())
+                loop {
+                    line.clear();
+                    let read = reader
+                        .read_line(&mut line)
+                        .context("failed to read Claude stdout")?;
+                    if read == 0 {
+                        break;
+                    }
+
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+
+                    let chunk: ClaudeChunk = serde_json::from_str(trimmed).with_context(|| {
+                        format!("failed to parse Claude stream line: {trimmed}")
+                    })?;
+
+                    for part in translator.push_chunk(&chunk) {
+                        if tx.send(Ok(part)).is_err() {
+                            return Ok(());
+                        }
+                    }
+                }
+
+                let completed = child.wait().context("failed to wait for Claude CLI")?;
+                if !completed.success() {
+                    let stderr = stderr_handle
+                        .and_then(|handle| handle.join().ok())
+                        .unwrap_or_default()
+                        .trim()
+                        .to_string();
+                    let message = if stderr.is_empty() {
+                        format!("Claude CLI exited with status {completed}")
+                    } else {
+                        stderr
+                    };
+                    let _ = tx.send(Ok(StreamPart::Error { message }));
+                    let _ = tx.send(Ok(StreamPart::Finish {
+                        reason: FinishReason::Error,
+                    }));
+                    return Ok(());
+                }
+
+                let _ = tx.send(Ok(StreamPart::Finish {
+                    reason: FinishReason::EndTurn,
+                }));
+                Ok(())
+            })();
+
+            if let Err(err) = result {
+                error!(error = %err, "Claude CLI streaming failed");
+                let _ = tx.send(Err(err));
+            }
+        });
+
+        Ok(Box::new(rx.into_iter()))
     }
 }
 
@@ -179,11 +227,9 @@ mod tests {
             .unwrap();
 
         assert!(matches!(parts.first(), Some(StreamPart::Start)));
-        assert!(
-            parts
-                .iter()
-                .any(|part| matches!(part, StreamPart::TextDelta(text) if text.delta == "hello"))
-        );
+        assert!(parts
+            .iter()
+            .any(|part| matches!(part, StreamPart::TextDelta(text) if text.delta == "hello")));
         assert!(matches!(
             parts.last(),
             Some(StreamPart::Finish {
