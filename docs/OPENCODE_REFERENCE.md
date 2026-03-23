@@ -1,10 +1,10 @@
-# opencode reference
+# OpenCode Reference
 
 This file is the internal implementation reference for OpenCode behavior that matters to `openclaude`.
 
 It is intended to replace dependence on a full local `opencode-reference/` checkout for normal backend work.
 
-## purpose in this project
+## Purpose in This Project
 
 `openclaude` is a translation layer between OpenCode and Claude Code.
 
@@ -19,7 +19,7 @@ This means OpenCode is the intended owner of:
 
 `openclaude` should adapt to OpenCode, not replace OpenCode.
 
-## key architectural conclusion
+## Key Architectural Conclusion
 
 Based on current plugin and code-surface research:
 
@@ -34,7 +34,7 @@ In practical terms:
 - plugin handles auth, headers, params, and transforms
 - `openclaude` handles native transport translation
 
-## what plugins appear able to do
+## What Plugins Appear Able to Do
 
 Relevant plugin capabilities and hook categories:
 
@@ -52,7 +52,7 @@ Relevant plugin capabilities and hook categories:
 
 These support a thin plugin frontend that forwards to `openclaude`.
 
-## what plugins should not be assumed to do
+## What Plugins Should Not Be Assumed to Do
 
 Do not assume a plugin can cleanly register an entirely new first-class provider runtime by itself.
 
@@ -62,9 +62,9 @@ Current guidance for this project is:
 - thin plugin for request/auth shaping
 - backend service for transport and translation
 
-## important OpenCode-owned concepts to preserve
+## Important OpenCode-Owned Concepts to Preserve
 
-### canonical history
+### Canonical History
 
 OpenCode should remain the owner of canonical message history.
 
@@ -74,17 +74,17 @@ For `openclaude`, this means:
 - backend should not require hidden continuation state
 - tool continuation should be representable by replaying message history with tool results included
 
-### sessions
+### Sessions
 
 OpenCode should own:
 
-- session ids
+- session IDs
 - conversation grouping
 - switching between providers/models
 
 The backend should not become the canonical session manager.
 
-### tool lifecycle
+### Tool Lifecycle
 
 OpenCode should own the real tool execution lifecycle.
 
@@ -93,7 +93,7 @@ The backend should only:
 - translate model-emitted tool intent
 - return tool-call events in a shape the frontend can understand
 
-### rendering semantics
+### Rendering Semantics
 
 OpenCode already has expectations for:
 
@@ -104,7 +104,7 @@ OpenCode already has expectations for:
 
 The backend should keep its event model aligned with those expectations.
 
-## project-local integration guidance
+## Project-Local Integration Guidance
 
 Current internal layering in `openclaude`:
 
@@ -116,28 +116,28 @@ Current internal layering in `openclaude`:
   - adapter and bridge boundary types
 - `server/`
   - HTTP server with OpenAI-compatible endpoints
-  - stdio service for direct process communication
+  - STDIO service for direct process communication
   - OpenAI-compatible request/response types
 
 Expected eventual no-patch integration shape:
 
-1. OpenCode config points a provider at an external backend or shim
-2. a thin plugin handles auth and request shaping
-3. the plugin sends full history to `openclaude`
-4. `openclaude` returns translated events
-5. OpenCode keeps owning sessions, tool execution, and visible history
+1. OpenCode config points a provider at an external backend or shim.
+2. A thin plugin handles auth and request shaping.
+3. The plugin sends full history to `openclaude`.
+4. `openclaude` returns translated events.
+5. OpenCode keeps owning sessions, tool execution, and visible history.
 
-## HTTP server protocol
+## HTTP Server Protocol
 
 `openclaude` exposes an OpenAI-compatible HTTP API for integration with OpenCode.
 
-### endpoints
+### Endpoints
 
 - `POST /v1/chat/completions` - chat completions (streaming and non-streaming)
 - `GET /v1/models` - list available models
 - `GET /health` - health check
 
-### request format
+### Request Format
 
 The server accepts standard OpenAI chat completion requests:
 
@@ -151,7 +151,7 @@ The server accepts standard OpenAI chat completion requests:
 }
 ```
 
-### response format
+### Response Format
 
 Non-streaming responses follow the OpenAI format:
 
@@ -173,7 +173,7 @@ Non-streaming responses follow the OpenAI format:
 
 Streaming responses use SSE with `data: {...}` lines and `data: [DONE]` at the end.
 
-### tool calls
+### Tool Calls
 
 Tool calls are returned in the OpenAI format:
 
@@ -197,7 +197,7 @@ Tool calls are returned in the OpenAI format:
 }
 ```
 
-## OpenCode configuration
+## OpenCode Configuration
 
 To use `openclaude` as a provider in OpenCode:
 
@@ -214,22 +214,24 @@ To use `openclaude` as a provider in OpenCode:
    - the plugin handles auth headers and session context
    - it's thin and doesn't implement provider logic
 
-### provider routing
+### Provider Routing
 
 OpenCode routes to providers based on:
+
 - provider ID in the model selection
 - baseURL in the provider configuration
 - the AI SDK's `createOpenAICompatible` for custom endpoints
 
 The plugin should not try to register a new provider runtime. Instead:
+
 - let OpenCode's config define the routing
 - use the plugin only for auth/headers/transforms
 
-### verified plugin limitation
+### Verified Plugin Limitation
 
 Based on the local OpenCode code surface:
 
-- plugins can contribute auth flows for existing provider ids
+- plugins can contribute auth flows for existing provider IDs
 - plugins can shape requests through hooks like `chat.headers` and `chat.params`
 - plugins cannot dynamically register a brand-new provider runtime at startup
 
@@ -242,9 +244,9 @@ Relevant files in the optional local checkout:
 
 The practical implication is that `openclaude` should assume one of the following setup patterns rather than true plugin-driven provider registration.
 
-### supported setup options
+### Supported Setup Options
 
-#### option 1: wrapper-managed bootstrap config
+#### Option 1: Wrapper-Managed Bootstrap Config
 
 `openclaude` can generate temporary bootstrap config for the launched `opencode` process without editing user files.
 
@@ -252,9 +254,9 @@ The practical implication is that `openclaude` should assume one of the followin
 - keeps the plugin thin at runtime
 - keeps the user's normal `opencode` command unchanged
 - uses `OPENCODE_CONFIG_CONTENT` so OpenCode merges the bootstrap entries with existing config for that process only
-- current implementation target is provider id `openclaude` with `haiku`, `sonnet`, and `opus` model entries backed by `@ai-sdk/openai-compatible`
+- current implementation target is provider ID `openclaude` with model entries resolved at launch using this precedence: manual override (`OPENCLAUDE_AVAILABLE_MODELS` / `--available-models`) -> cached local discovery -> Claude CLI probing -> fallback `haiku`, `sonnet`, and `opus`, backed by `@ai-sdk/openai-compatible`
 
-#### option 2: plugin-managed config bootstrap
+#### Option 2: Plugin-Managed Config Bootstrap
 
 The plugin can create or update the user's OpenCode config so the `openclaude` provider entry exists before chat starts.
 
@@ -262,7 +264,7 @@ The plugin can create or update the user's OpenCode config so the `openclaude` p
 - more invasive because it edits user config
 - no longer the preferred implementation direction in this repository
 
-#### option 3: reuse an existing OpenAI-compatible provider slot
+#### Option 3: Reuse an Existing OpenAI-Compatible Provider Slot
 
 The user or bootstrap flow points an existing custom/OpenAI-compatible provider entry at `http://127.0.0.1:3000/v1`.
 
@@ -270,7 +272,7 @@ The user or bootstrap flow points an existing custom/OpenAI-compatible provider 
 - works with the current backend immediately
 - still depends on config existing first
 
-#### option 4: upstream provider hook support
+#### Option 4: Upstream Provider Hook Support
 
 OpenCode could eventually add a real plugin hook for provider registration.
 
@@ -278,19 +280,19 @@ OpenCode could eventually add a real plugin hook for provider registration.
 - not available in the current code surface
 - outside the current no-patch integration plan unless accepted upstream
 
-### recommended direction
+### Recommended Direction
 
 For the current repository, the best practical path is:
 
-1. keep `openclaude serve` as the backend runtime entrypoint
-2. make bare `openclaude` launch `opencode` with temporary bootstrap config
-3. keep the plugin focused on auth, headers, params, and transforms
-4. avoid editing user config by default
-5. avoid designing around unsupported dynamic provider registration
+1. Keep `openclaude serve` as the backend runtime entrypoint.
+2. Make bare `openclaude` launch `opencode` with temporary bootstrap config.
+3. Keep the plugin focused on auth, headers, params, and transforms.
+4. Avoid editing user config by default.
+5. Avoid designing around unsupported dynamic provider registration.
 
 The current implementation direction is wrapper-managed bootstrap config plus automatic plugin loading.
 
-## current backend contract expectations
+## Current Backend Contract Expectations
 
 The current direction in this repository is:
 
@@ -300,31 +302,20 @@ The current direction in this repository is:
 
 The backend should not require:
 
-- transport-level resume ids
+- transport-level resume IDs
 - backend-owned suspended tool state
 - provider-local hidden memory
 
-## important implementation takeaways for future work
+## Important Implementation Takeaways for Future Work
 
-### for backend changes
+### For Backend Changes
 
 - prefer richer request history over hidden backend state
 - prefer typed stream events over opaque text payloads
 - keep the translation boundary narrow and testable
 
-### for plugin or shim work
+### For Plugin or Shim Work
 
 - keep the frontend thin
 - avoid duplicating backend transport logic in TypeScript if Rust already owns it well
 - let config define provider routing rather than relying on plugin magic
-
-## recommended future references when implementing
-
-When details are needed beyond this reference, the most relevant OpenCode areas are still conceptually:
-
-- plugin hook definitions
-- provider resolution/loading
-- session request construction
-- message and stream-part persistence
-
-If this project begins depending on new OpenCode behavior, update this file rather than reintroducing machine-specific checkout assumptions.

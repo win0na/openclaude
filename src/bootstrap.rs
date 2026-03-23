@@ -1,5 +1,6 @@
+use crate::claude::ClaudeCli;
 use crate::cli::Cli;
-use crate::provider::default_models;
+use crate::provider::ProviderModel;
 use anyhow::{bail, Context};
 use serde_json::{json, Map, Value};
 use std::env;
@@ -8,7 +9,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 pub fn launch_opencode(cli: &Cli, args: &[OsString]) -> anyhow::Result<()> {
-    let bootstrap_config = merged_bootstrap_config(cli)?;
+    let models = ClaudeCli::new(&cli.claude_bin).discover_available_models(&cli.available_models);
+    let bootstrap_config = merged_bootstrap_config(cli, &models)?;
     let status = Command::new(&cli.opencode_bin)
         .args(args)
         .env("OPENCLAUDE_PROVIDER_ID", &cli.provider_id)
@@ -29,9 +31,9 @@ pub fn launch_opencode(cli: &Cli, args: &[OsString]) -> anyhow::Result<()> {
     }
 }
 
-fn merged_bootstrap_config(cli: &Cli) -> anyhow::Result<Value> {
+fn merged_bootstrap_config(cli: &Cli, models: &[ProviderModel]) -> anyhow::Result<Value> {
     let mut config = existing_inline_config()?;
-    merge_missing(&mut config, bootstrap_patch(cli)?);
+    merge_missing(&mut config, bootstrap_patch(cli, models)?);
     Ok(config)
 }
 
@@ -41,15 +43,15 @@ fn existing_inline_config() -> anyhow::Result<Value> {
     };
 
     serde_json::from_str(&text.to_string_lossy()).context(
-        "OPENCLAUDE cannot merge the existing OPENCODE_CONFIG_CONTENT because it is not valid JSON",
+        "openclaude cannot merge the existing OPENCODE_CONFIG_CONTENT because it is not valid JSON",
     )
 }
 
-fn bootstrap_patch(cli: &Cli) -> anyhow::Result<Value> {
+fn bootstrap_patch(cli: &Cli, models: &[ProviderModel]) -> anyhow::Result<Value> {
     let plugin = plugin_entry()?;
-    let mut models = Map::new();
-    for model in default_models() {
-        models.insert(
+    let mut model_map = Map::new();
+    for model in models {
+        model_map.insert(
             model.id.to_string(),
             json!({
                 "name": model.display_name,
@@ -67,7 +69,7 @@ fn bootstrap_patch(cli: &Cli) -> anyhow::Result<Value> {
             "options": {
                 "baseURL": cli.base_url,
             },
-            "models": models,
+            "models": model_map,
         }),
     );
 
@@ -119,12 +121,14 @@ fn merge_missing(target: &mut Value, patch: Value) {
 mod tests {
     use super::*;
     use crate::cli::Cli;
+    use crate::provider::ProviderModel;
 
     fn test_cli() -> Cli {
         Cli {
             command: None,
             provider_id: "openclaude".into(),
             default_model: "sonnet".into(),
+            available_models: Vec::new(),
             claude_bin: "claude".into(),
             opencode_bin: "opencode".into(),
             base_url: "http://127.0.0.1:3000/v1".into(),
@@ -134,7 +138,11 @@ mod tests {
 
     #[test]
     fn bootstrap_patch_contains_plugin_and_provider() {
-        let value = bootstrap_patch(&test_cli()).unwrap();
+        let value = bootstrap_patch(
+            &test_cli(),
+            &[ProviderModel::claude("sonnet", "Claude Sonnet 4.6")],
+        )
+        .unwrap();
         assert_eq!(
             value["provider"]["openclaude"]["options"]["baseURL"],
             "http://127.0.0.1:3000/v1"
@@ -158,19 +166,11 @@ mod tests {
                 }
             }
         });
-        let patch = json!({
-            "plugin": ["file:///existing.ts", "file:///new.ts"],
-            "provider": {
-                "openclaude": {
-                    "options": {
-                        "baseURL": "http://default"
-                    },
-                    "models": {
-                        "sonnet": {"name": "Claude Sonnet"}
-                    }
-                }
-            }
-        });
+        let patch = bootstrap_patch(
+            &test_cli(),
+            &[ProviderModel::claude("sonnet", "Claude Sonnet 4.6")],
+        )
+        .unwrap();
 
         merge_missing(&mut target, patch);
 

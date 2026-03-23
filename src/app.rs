@@ -1,10 +1,9 @@
-use crate::claude::ClaudeCliRuntime;
+use crate::claude::{ClaudeCli, ClaudeCliRuntime};
 use crate::bootstrap::launch_opencode;
 use crate::cli::{Cli, Command};
 use crate::console;
 use crate::config::RuntimeConfig;
 use crate::integration::OpenCodeBridge;
-use crate::provider::default_models;
 use crate::reference::refresh_reference;
 use crate::server::{OpenClaudeService, create_router, serve_stdio};
 use std::io::{self, Write};
@@ -22,7 +21,6 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
 
     match &cli.command {
         None => launch_opencode(&cli, &[]),
-        Some(Command::Bootstrap { args }) => launch_opencode(&cli, args),
         Some(Command::External(args)) => launch_opencode(&cli, args),
         Some(Command::Help) => {
             let mut stdout = io::stdout().lock();
@@ -44,14 +42,16 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         }
         Some(Command::Serve { host, port }) => {
             let config = RuntimeConfig::from_cli(&cli);
-            let models = default_models();
+            let models = ClaudeCli::new(&config.claude_bin)
+                .discover_available_models(&config.available_models);
+            let runtime_models = models.len();
             let runtime = ClaudeCliRuntime::new(config.claude_bin.clone(), models.clone());
             let bridge = OpenCodeBridge::new(runtime, models);
 
             info!(
                 model = %config.default_model,
                 provider_id = %config.provider_id,
-                runtime_models = 3,
+                runtime_models,
                 integration_mode = "http_server",
                 "openclaude initialized"
             );
@@ -77,7 +77,9 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         }
         Some(Command::Stdio) => {
             let config = RuntimeConfig::from_cli(&cli);
-            let models = default_models();
+            let models = ClaudeCli::new(&config.claude_bin)
+                .discover_available_models(&config.available_models);
+            let runtime_models = models.len();
             let runtime = ClaudeCliRuntime::new(config.claude_bin.clone(), models.clone());
             let bridge = OpenCodeBridge::new(runtime, models);
             let mut service = OpenClaudeService::new(bridge);
@@ -85,7 +87,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             info!(
                 model = %config.default_model,
                 provider_id = %config.provider_id,
-                runtime_models = 3,
+                runtime_models,
                 integration_mode = "standalone_bridge",
                 "openclaude initialized"
             );

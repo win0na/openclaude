@@ -1,10 +1,10 @@
-# claude code reference
+# Claude Code Reference
 
 This file is the internal implementation reference for Claude Code CLI behavior that matters to `openclaude`.
 
 It exists so backend work can be grounded in stable project-local documentation instead of ad hoc memory or machine-specific source checkouts.
 
-## purpose in this project
+## Purpose in This Project
 
 `openclaude` treats Claude Code as the model-facing transport.
 
@@ -22,7 +22,7 @@ The backend should not treat Claude Code as the canonical owner of:
 - OpenCode memory or context
 - frontend conversation ownership
 
-## CLI invocation model
+## CLI Invocation Model
 
 The current project uses the CLI in non-interactive print mode.
 
@@ -32,19 +32,38 @@ Core flags used by `openclaude` today:
 claude \
   --print \
   --model <model> \
+  --permission-mode bypassPermissions \
+  --dangerously-skip-permissions \
   --output-format stream-json \
   --verbose \
   --include-partial-messages \
   [--system-prompt <prompt>]
 ```
 
-### current meanings
+### Current Meanings
 
 - `--print`
   - non-interactive mode
   - stdout becomes machine-readable output instead of a TUI
 - `--model`
   - selects Claude Code's target model
+
+`openclaude` may also issue short non-interactive Claude probes during launch to determine which model aliases are actually available in the local Claude environment.
+
+- precedence order is: manual override -> cached discovery -> live probe -> static fallback
+- manual override comes from `OPENCLAUDE_AVAILABLE_MODELS` / `--available-models`
+- cache defaults to `$XDG_CACHE_HOME/openclaude/models.json` or `~/.cache/openclaude/models.json`
+- `OPENCLAUDE_MODEL_CACHE` can override the cache file path
+- current live probe targets are `haiku`, `sonnet`, and `opus`
+- successful probes become the OpenCode-visible model list
+- if all probes fail, `openclaude` falls back to the static alias set
+
+- `--permission-mode bypassPermissions`
+  - disables Claude Code's interactive approval flow for this transport session
+  - `openclaude` relies on OpenCode-owned tool execution instead of Claude-local permission UX
+- `--dangerously-skip-permissions`
+  - ensures Claude does not narrate or wait on local permission prompts
+  - this is intentional here because Claude Code is acting as a stateless transport, not the canonical tool runner
 - `--output-format stream-json`
   - newline-delimited JSON stream
   - this is the most important mode for `openclaude`
@@ -56,9 +75,9 @@ claude \
   - allows backend-controlled system injection
   - should be derived from OpenCode-owned history, not backend-owned memory
 
-## important known constraints
+## Important Known Constraints
 
-### Claude Code is not the conversation owner
+### Claude Code Is Not the Conversation Owner
 
 For this project, Claude Code must be treated as a stateless transport target.
 
@@ -66,15 +85,15 @@ That means:
 
 - every backend request should be reconstructible from OpenCode-owned history
 - no backend-owned suspended Claude session should be required
-- no backend-specific resume ids should be necessary for correctness
+- no backend-specific resume IDs should be necessary for correctness
 
-### tool use is emitted, not owned
+### Tool Use Is Emitted, Not Owned
 
 Claude Code can emit tool-use blocks, but in `openclaude` these should be translated into provider-like events and handed back to the frontend layer.
 
 The backend should not become the canonical owner of tool continuation state.
 
-### prompt replay is expected
+### Prompt Replay Is Expected
 
 If a turn needs to continue after a tool result, the stateless target architecture is:
 
@@ -84,9 +103,9 @@ If a turn needs to continue after a tool result, the stateless target architectu
 
 This is less like restoring an internal Claude session and more like deterministic replay.
 
-## stream-json structures relevant to openclaude
+## Stream-JSON Structures Relevant to openclaude
 
-### top-level chunk kinds
+### Top-Level Chunk Kinds
 
 Observed and modeled in the codebase:
 
@@ -109,7 +128,7 @@ Important event types:
 - `content_block_delta`
 - `content_block_stop`
 
-### content blocks
+### Content Blocks
 
 Modeled block types:
 
@@ -117,7 +136,7 @@ Modeled block types:
 - `text`
 - `tool_use`
 
-#### thinking block
+#### Thinking Block
 
 ```json
 {
@@ -126,7 +145,7 @@ Modeled block types:
 }
 ```
 
-#### text block
+#### Text Block
 
 ```json
 {
@@ -135,7 +154,7 @@ Modeled block types:
 }
 ```
 
-#### tool_use block
+#### Tool-Use Block
 
 ```json
 {
@@ -146,7 +165,7 @@ Modeled block types:
 }
 ```
 
-### deltas
+### Deltas
 
 Modeled delta types:
 
@@ -154,7 +173,7 @@ Modeled delta types:
 - `text_delta`
 - `input_json_delta`
 
-#### thinking delta
+#### Thinking Delta
 
 ```json
 {
@@ -163,7 +182,7 @@ Modeled delta types:
 }
 ```
 
-#### text delta
+#### Text Delta
 
 ```json
 {
@@ -172,7 +191,7 @@ Modeled delta types:
 }
 ```
 
-#### input json delta
+#### Input JSON Delta
 
 ```json
 {
@@ -183,39 +202,39 @@ Modeled delta types:
 
 This matters because tool input often arrives incrementally and must be accumulated until `content_block_stop`.
 
-## translation rules currently assumed by openclaude
+## Translation Rules Currently Assumed by openclaude
 
-### reasoning
+### Reasoning
 
 - `thinking` / `thinking_delta` -> reasoning lifecycle parts
 - start and stop are tracked by content-block boundaries
 
-### text
+### Text
 
 - `text` / `text_delta` -> text lifecycle parts
 
-### tool use
+### Tool Use
 
 - `tool_use` block start -> tool input start
 - `input_json_delta` -> tool input delta
 - block stop -> tool input end + final tool call
 
-## backend implementation guidance
+## Backend Implementation Guidance
 
 When changing backend code, preserve these rules:
 
-1. do not introduce backend-owned session ids for Claude continuity
-2. do not persist suspended Claude tool state as the source of truth
-3. prefer replay from OpenCode-owned canonical history
-4. keep stream translation typed and explicit
-5. do not collapse tool-use deltas into opaque blobs if the frontend can use richer lifecycle data
+1. Do not introduce backend-owned session IDs for Claude continuity.
+2. Do not persist suspended Claude tool state as the source of truth.
+3. Prefer replay from OpenCode-owned canonical history.
+4. Keep stream translation typed and explicit.
+5. Do not collapse tool-use deltas into opaque blobs if the frontend can use richer lifecycle data.
 
-## current project files that implement this behavior
+## Current Project Files That Implement This Behavior
 
 - `src/claude/cli.rs`
   - flag construction and process target
 - `src/claude/stream.rs`
-  - deserialization of Claude Code stream-json chunks
+  - deserialization of Claude Code stream-JSON chunks
 - `src/claude/translate.rs`
   - stateful translation from Claude chunks to provider stream parts
 - `src/claude/runtime.rs`
@@ -223,14 +242,14 @@ When changing backend code, preserve these rules:
 - `src/claude/prompt.rs`
   - prompt replay from canonical history
 
-## things to watch for when editing this project
+## Things to Watch For When Editing This Project
 
 - shell quoting in commit messages can eat backticks; quote carefully
 - CLI output formats can drift across Claude Code versions; keep parsing narrow and tested
 - avoid depending on undocumented continuity semantics when the project goal is a stateless backend
 - if a new feature appears to require backend-owned memory, prefer enriching canonical request history first
 
-## recommended future checks
+## Recommended Future Checks
 
 - verify whether newer Claude Code releases expose additional machine-readable fields useful for reasoning/tool provenance
 - confirm whether model identifiers or stream event names changed across CLI versions
