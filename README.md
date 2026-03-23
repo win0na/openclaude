@@ -32,6 +32,14 @@ based on current plugin research, the plugin layer should not try to register a 
 - a thin plugin frontend for auth, headers, params, and message transforms
 - `openclaude` as the stateless native translation backend
 
+practical setup options for this project are:
+
+- a CLI bootstrap command that writes the provider entry into OpenCode config
+- plugin-managed config bootstrap that prepares the provider entry before use
+- reuse of an existing OpenAI-compatible provider slot that points at `openclaude`
+
+true dynamic provider registration from a plugin is not currently supported by the verified OpenCode code surface.
+
 ## status
 
 the project currently provides:

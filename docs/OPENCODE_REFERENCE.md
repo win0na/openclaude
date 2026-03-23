@@ -225,6 +225,66 @@ The plugin should not try to register a new provider runtime. Instead:
 - let OpenCode's config define the routing
 - use the plugin only for auth/headers/transforms
 
+### verified plugin limitation
+
+Based on the local OpenCode code surface:
+
+- plugins can contribute auth flows for existing provider ids
+- plugins can shape requests through hooks like `chat.headers` and `chat.params`
+- plugins cannot dynamically register a brand-new provider runtime at startup
+
+Relevant files in the optional local checkout:
+
+- `opencode-reference/packages/plugin/src/index.ts`
+- `opencode-reference/packages/opencode/src/plugin/index.ts`
+- `opencode-reference/packages/opencode/src/provider/provider.ts`
+- `opencode-reference/packages/opencode/src/session/llm.ts`
+
+The practical implication is that `openclaude` should assume one of the following setup patterns rather than true plugin-driven provider registration.
+
+### supported setup options
+
+#### option 1: plugin-managed config bootstrap
+
+The plugin can create or update the user's OpenCode config so the `openclaude` provider entry exists before chat starts.
+
+- best fit if we want the plugin to feel automatic
+- still config-backed under the hood
+- no OpenCode patching required
+
+#### option 2: CLI bootstrap command
+
+`openclaude` can ship a command that writes the provider entry into OpenCode config.
+
+- safest implementation path
+- easiest to explain and test
+- plugin remains thin at runtime
+
+#### option 3: reuse an existing OpenAI-compatible provider slot
+
+The user or bootstrap flow points an existing custom/OpenAI-compatible provider entry at `http://127.0.0.1:3000/v1`.
+
+- lowest engineering risk
+- works with the current backend immediately
+- still depends on config existing first
+
+#### option 4: upstream provider hook support
+
+OpenCode could eventually add a real plugin hook for provider registration.
+
+- only path to true dynamic provider registration
+- not available in the current code surface
+- outside the current no-patch integration plan unless accepted upstream
+
+### recommended direction
+
+For the current repository, the best practical path is:
+
+1. keep `openclaude serve` as the runtime entrypoint
+2. add a bootstrap path that creates the provider config automatically
+3. keep the plugin focused on auth, headers, params, and transforms
+4. avoid designing around unsupported dynamic provider registration
+
 ## current backend contract expectations
 
 The current direction in this repository is:
