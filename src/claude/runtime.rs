@@ -114,7 +114,7 @@ impl ProviderRuntime for ClaudeCliRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provider::{MessageRole, ProviderMessage, StreamPart};
+    use crate::provider::{MessagePart, MessageRole, ProviderMessage, StreamPart};
     use std::fs;
     use tempfile::tempdir;
 
@@ -163,7 +163,9 @@ mod tests {
             prompt: "hello".into(),
             messages: vec![ProviderMessage {
                 role: MessageRole::User,
-                content: "earlier".into(),
+                parts: vec![MessagePart::Text {
+                    text: "earlier".into(),
+                }],
             }],
         };
 

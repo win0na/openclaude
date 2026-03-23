@@ -1,14 +1,34 @@
 use crate::integration::{AdapterStep, OpenCodeAdapter};
 use crate::provider::{
-    MessageRole, ProviderInfo, ProviderMessage, ProviderModel, ProviderRequest, ProviderRuntime,
+    MessagePart, MessageRole, ProviderInfo, ProviderMessage, ProviderModel, ProviderRequest,
+    ProviderRuntime,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BridgeMessage {
     pub role: BridgeRole,
-    pub content: String,
+    pub parts: Vec<BridgeMessagePart>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BridgeMessagePart {
+    Text {
+        text: String,
+    },
+    ToolCall {
+        call_id: String,
+        tool_name: String,
+        input: Value,
+    },
+    ToolResult {
+        call_id: String,
+        tool_name: Option<String>,
+        output: Value,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,7 +102,31 @@ impl<R: ProviderRuntime> OpenCodeBridge<R> {
                         BridgeRole::Assistant => MessageRole::Assistant,
                         BridgeRole::Tool => MessageRole::Tool,
                     },
-                    content: message.content,
+                    parts: message
+                        .parts
+                        .into_iter()
+                        .map(|part| match part {
+                            BridgeMessagePart::Text { text } => MessagePart::Text { text },
+                            BridgeMessagePart::ToolCall {
+                                call_id,
+                                tool_name,
+                                input,
+                            } => MessagePart::ToolCall {
+                                call_id,
+                                tool_name,
+                                input,
+                            },
+                            BridgeMessagePart::ToolResult {
+                                call_id,
+                                tool_name,
+                                output,
+                            } => MessagePart::ToolResult {
+                                call_id,
+                                tool_name,
+                                output,
+                            },
+                        })
+                        .collect(),
                 })
                 .collect(),
         })
@@ -141,7 +185,9 @@ mod tests {
                 prompt: "hello".into(),
                 messages: vec![BridgeMessage {
                     role: BridgeRole::User,
-                    content: "earlier".into(),
+                    parts: vec![BridgeMessagePart::Text {
+                        text: "earlier".into(),
+                    }],
                 }],
             })
             .unwrap();

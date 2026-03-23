@@ -54,7 +54,9 @@ pub fn serve_stdio<R: ProviderRuntime + Clone, In: Read, Out: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integration::{BridgeMessage, BridgeRequest, BridgeRole, OpenCodeBridge};
+    use crate::integration::{
+        BridgeMessage, BridgeMessagePart, BridgeRequest, BridgeRole, OpenCodeBridge,
+    };
     use crate::provider::{
         FinishReason, ProviderInfo, ProviderModel, ProviderRequest, ProviderRuntime, StreamPart,
     };
@@ -118,7 +120,9 @@ mod tests {
                         prompt: "hello".into(),
                         messages: vec![BridgeMessage {
                             role: BridgeRole::User,
-                            content: "earlier".into(),
+                            parts: vec![BridgeMessagePart::Text {
+                                text: "earlier".into(),
+                            }],
                         }],
                     },
                 },

@@ -1,4 +1,4 @@
-use crate::provider::{MessageRole, ProviderRequest};
+use crate::provider::{MessagePart, MessageRole, ProviderRequest};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClaudePrompt {
@@ -20,22 +20,22 @@ pub fn build_claude_prompt(request: &ProviderRequest) -> ClaudePrompt {
     let mut saw_messages = false;
 
     for message in &request.messages {
-        let trimmed = message.content.trim();
-        if trimmed.is_empty() {
+        let rendered = render_message_parts(&message.parts);
+        if rendered.trim().is_empty() {
             continue;
         }
 
         saw_messages = true;
         match message.role {
-            MessageRole::System => system_sections.push(trimmed.to_string()),
+            MessageRole::System => system_sections.push(rendered),
             MessageRole::User => {
-                push_section(&mut body, "user", trimmed);
+                push_section(&mut body, "user", &rendered);
             }
             MessageRole::Assistant => {
-                push_section(&mut body, "assistant", trimmed);
+                push_section(&mut body, "assistant", &rendered);
             }
             MessageRole::Tool => {
-                push_section(&mut body, "tool", trimmed);
+                push_section(&mut body, "tool", &rendered);
             }
         }
     }
@@ -61,10 +61,47 @@ fn push_section(buffer: &mut String, role: &str, content: &str) {
     buffer.push_str(content);
 }
 
+fn render_message_parts(parts: &[MessagePart]) -> String {
+    let mut rendered = Vec::new();
+
+    for part in parts {
+        match part {
+            MessagePart::Text { text } => {
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    rendered.push(trimmed.to_string());
+                }
+            }
+            MessagePart::ToolCall {
+                call_id,
+                tool_name,
+                input,
+            } => rendered.push(format!(
+                "tool_call:\n- id: {call_id}\n- tool: {tool_name}\n- input: {}",
+                serde_json::to_string_pretty(input).unwrap_or_else(|_| "{}".into())
+            )),
+            MessagePart::ToolResult {
+                call_id,
+                tool_name,
+                output,
+            } => rendered.push(format!(
+                "tool_result:\n- id: {call_id}\n- tool: {}\n- output: {}",
+                tool_name.clone().unwrap_or_default(),
+                serde_json::to_string_pretty(output).unwrap_or_else(|_| "{}".into())
+            )),
+        }
+    }
+
+    rendered.join("\n\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provider::{MessageRole, ProviderMessage, ProviderModel, ProviderRequest};
+    use crate::provider::{
+        MessagePart, MessageRole, ProviderMessage, ProviderModel, ProviderRequest,
+    };
+    use serde_json::json;
 
     #[test]
     fn builds_system_and_conversation_sections() {
@@ -75,19 +112,36 @@ mod tests {
             messages: vec![
                 ProviderMessage {
                     role: MessageRole::System,
-                    content: "agent rules".into(),
+                    parts: vec![MessagePart::Text {
+                        text: "agent rules".into(),
+                    }],
                 },
                 ProviderMessage {
                     role: MessageRole::User,
-                    content: "first question".into(),
+                    parts: vec![MessagePart::Text {
+                        text: "first question".into(),
+                    }],
                 },
                 ProviderMessage {
                     role: MessageRole::Assistant,
-                    content: "first answer".into(),
+                    parts: vec![
+                        MessagePart::Text {
+                            text: "first answer".into(),
+                        },
+                        MessagePart::ToolCall {
+                            call_id: "toolu_1".into(),
+                            tool_name: "Read".into(),
+                            input: json!({"file_path": "/tmp/a"}),
+                        },
+                    ],
                 },
                 ProviderMessage {
                     role: MessageRole::Tool,
-                    content: "tool result".into(),
+                    parts: vec![MessagePart::ToolResult {
+                        call_id: "toolu_1".into(),
+                        tool_name: Some("Read".into()),
+                        output: json!({"content": "tool result"}),
+                    }],
                 },
             ],
         });
@@ -98,7 +152,8 @@ mod tests {
         );
         assert!(prompt.user_prompt.contains("user:\nfirst question"));
         assert!(prompt.user_prompt.contains("assistant:\nfirst answer"));
-        assert!(prompt.user_prompt.contains("tool:\ntool result"));
+        assert!(prompt.user_prompt.contains("tool_call:\n- id: toolu_1"));
+        assert!(prompt.user_prompt.contains("tool_result:\n- id: toolu_1"));
         assert!(prompt.user_prompt.ends_with("user:\nlatest question"));
     }
 }

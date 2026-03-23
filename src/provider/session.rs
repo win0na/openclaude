@@ -65,7 +65,8 @@ fn extract_tool_call(part: &StreamPart) -> Option<&ToolCallPart> {
 mod tests {
     use super::*;
     use crate::provider::{
-        FinishReason, MessageRole, ProviderInfo, ProviderMessage, ProviderModel, ProviderRequest,
+        FinishReason, MessagePart, MessageRole, ProviderInfo, ProviderMessage, ProviderModel,
+        ProviderRequest,
     };
     use serde_json::json;
     use std::collections::VecDeque;
@@ -113,7 +114,9 @@ mod tests {
             prompt: "hello".into(),
             messages: vec![ProviderMessage {
                 role: MessageRole::User,
-                content: "earlier".into(),
+                parts: vec![MessagePart::Text {
+                    text: "earlier".into(),
+                }],
             }],
         }
     }
