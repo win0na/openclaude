@@ -5,6 +5,7 @@ use crate::integration::OpenCodeBridge;
 use crate::provider::default_models;
 use crate::reference::refresh_reference;
 use crate::server::{OpenClaudeService, create_router, serve_stdio};
+use std::io::{self, Write};
 use std::net::SocketAddr;
 use tracing::info;
 
@@ -18,6 +19,12 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         .init();
 
     match &cli.command {
+        Some(Command::Help) | None => {
+            let mut stdout = io::stdout().lock();
+            stdout.write_all(crate::cli::detailed_help().as_bytes())?;
+            stdout.write_all(b"\n")?;
+            Ok(())
+        }
         Some(Command::Reference { project_root }) => {
             let result = refresh_reference(project_root)?;
             info!(
@@ -52,7 +59,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             })?;
             Ok(())
         }
-        Some(Command::Stdio) | None => {
+        Some(Command::Stdio) => {
             let config = RuntimeConfig::from_cli(&cli);
             let models = default_models();
             let runtime = ClaudeCliRuntime::new(config.claude_bin.clone(), models.clone());
