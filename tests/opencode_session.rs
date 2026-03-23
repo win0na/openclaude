@@ -1,5 +1,6 @@
 use serde_json::Value;
 use std::fs;
+use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -68,23 +69,37 @@ fn stop_server(child: &mut Child) {
 
 fn run_wrapper(port: u16, script: &Path, args: &[&str], timeout_secs: u64) -> Output {
     let binary = env!("CARGO_BIN_EXE_openclaude");
+    let temp = TempDir::new().unwrap();
+    let stdout_path = temp.path().join("wrapper.stdout");
+    let stderr_path = temp.path().join("wrapper.stderr");
+    let stdout_file = File::create(&stdout_path).unwrap();
+    let stderr_file = File::create(&stderr_path).unwrap();
     let mut command = Command::new(binary);
     command
         .args(args)
         .env("OPENCLAUDE_CLAUDE_BIN", script)
         .env("OPENCLAUDE_BASE_URL", format!("http://127.0.0.1:{port}/v1"))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stdout(Stdio::from(stdout_file))
+        .stderr(Stdio::from(stderr_file));
 
     let mut child = command.spawn().unwrap();
     let start = Instant::now();
     loop {
-        if let Some(_status) = child.try_wait().unwrap() {
-            return child.wait_with_output().unwrap();
+        if let Some(status) = child.try_wait().unwrap() {
+            return Output {
+                status,
+                stdout: fs::read(&stdout_path).unwrap(),
+                stderr: fs::read(&stderr_path).unwrap(),
+            };
         }
         if start.elapsed() > Duration::from_secs(timeout_secs) {
             let _ = child.kill();
-            return child.wait_with_output().unwrap();
+            let status = child.wait().unwrap();
+            return Output {
+                status,
+                stdout: fs::read(&stdout_path).unwrap(),
+                stderr: fs::read(&stderr_path).unwrap(),
+            };
         }
         thread::sleep(Duration::from_millis(100));
     }
@@ -120,8 +135,7 @@ if printf '%s' "$input" | grep -q 'tool_result:'; then
   printf '%s\n' '{"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null}}}'
   printf '%s\n' '{"type":"stream_event","event":{"type":"content_block_stop","index":0}}'
 else
-  printf '%s\n' '{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"bash","input":{}}}}'
-  printf '%s\n' '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\\"command\\":\\"printf tool-pass\\",\\"description\\":\\"print test text\\"}"}}}'
+  printf '%s\n' '{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"bash","input":{"command":"printf tool-pass","description":"print test text"}}}}'
   printf '%s\n' '{"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null}}}'
   printf '%s\n' '{"type":"stream_event","event":{"type":"content_block_stop","index":0}}'
 fi
@@ -167,8 +181,10 @@ fn opencode_run_basic_message_finishes_once() {
 
     assert!(
         output.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
+        "stdout: {}\nstderr: {}\nserver logs: {:?}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+        *logs.lock().unwrap()
     );
     let events = parse_json_lines(&String::from_utf8_lossy(&output.stdout));
     let texts = events
@@ -191,7 +207,6 @@ fn opencode_run_basic_message_finishes_once() {
 }
 
 #[test]
-#[ignore = "currently reproduces the repeated-message loop in real opencode tool flow"]
 fn opencode_run_tool_flow_finishes_without_looping() {
     let temp = TempDir::new().unwrap();
     let script = write_fake_claude_script(temp.path(), "tool");
@@ -217,8 +232,10 @@ fn opencode_run_tool_flow_finishes_without_looping() {
 
     assert!(
         output.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
+        "stdout: {}\nstderr: {}\nserver logs: {:?}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+        *logs.lock().unwrap()
     );
     let events = parse_json_lines(&String::from_utf8_lossy(&output.stdout));
     let texts = events
@@ -234,8 +251,11 @@ fn opencode_run_tool_flow_finishes_without_looping() {
         .iter()
         .filter(|event| event["type"] == "step_finish")
         .collect::<Vec<_>>();
+    let finish_reasons = finishes
+        .iter()
+        .map(|event| event["part"]["reason"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
 
     assert_eq!(texts, vec!["tool flow finished"]);
-    assert_eq!(finishes.len(), 1);
-    assert_eq!(finishes[0]["part"]["reason"], "stop");
+    assert_eq!(finish_reasons, vec!["tool-calls", "stop"]);
 }

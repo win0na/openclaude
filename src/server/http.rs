@@ -158,21 +158,27 @@ fn to_bridge_request(request: &ChatRequest) -> Result<BridgeRequest, String> {
                 ChatRole::Tool => BridgeRole::Tool,
             };
 
-            let parts = match &m.content {
-                ChatContent::Null => Vec::new(),
-                ChatContent::Text(text) => vec![BridgeMessagePart::Text { text: text.clone() }],
-                ChatContent::Parts(parts) => parts
-                    .iter()
-                    .filter_map(|p| match p {
-                        crate::server::openai::ChatContentPart::Text { text } => {
-                            Some(BridgeMessagePart::Text { text: text.clone() })
-                        }
-                        crate::server::openai::ChatContentPart::ImageUrl { .. } => None,
-                    })
-                    .collect(),
+            let mut parts = if m.role == ChatRole::Tool {
+                vec![BridgeMessagePart::ToolResult {
+                    call_id: m.tool_call_id.clone().unwrap_or_default(),
+                    tool_name: m.name.clone(),
+                    output: chat_content_to_json(&m.content),
+                }]
+            } else {
+                match &m.content {
+                    ChatContent::Null => Vec::new(),
+                    ChatContent::Text(text) => vec![BridgeMessagePart::Text { text: text.clone() }],
+                    ChatContent::Parts(parts) => parts
+                        .iter()
+                        .filter_map(|p| match p {
+                            crate::server::openai::ChatContentPart::Text { text } => {
+                                Some(BridgeMessagePart::Text { text: text.clone() })
+                            }
+                            crate::server::openai::ChatContentPart::ImageUrl { .. } => None,
+                        })
+                        .collect(),
+                }
             };
-
-            let mut parts = parts;
             if let Some(tool_calls) = &m.tool_calls {
                 parts.extend(tool_calls.iter().map(|call| BridgeMessagePart::ToolCall {
                     call_id: call.id.clone(),
@@ -195,6 +201,10 @@ fn to_bridge_request(request: &ChatRequest) -> Result<BridgeRequest, String> {
         },
         messages,
     })
+}
+
+fn chat_content_to_json(content: &ChatContent) -> serde_json::Value {
+    serde_json::to_value(content).unwrap_or(serde_json::Value::Null)
 }
 
 fn build_chat_response(model: String, step: AdapterStep) -> ChatResponse {
@@ -696,6 +706,36 @@ mod tests {
         assert!(matches!(
             &bridge.messages[0].parts[0],
             BridgeMessagePart::ToolCall { tool_name, .. } if tool_name == "Read"
+        ));
+    }
+
+    #[test]
+    fn bridge_request_maps_tool_messages_to_tool_results() {
+        let request = ChatRequest {
+            model: "sonnet".into(),
+            messages: vec![ChatMessage {
+                role: ChatRole::Tool,
+                content: ChatContent::Text("tool-pass".into()),
+                name: Some("bash".into()),
+                tool_call_id: Some("toolu_1".into()),
+                tool_calls: None,
+            }],
+            stream: false,
+            temperature: None,
+            top_p: None,
+            max_tokens: None,
+            tools: Vec::new(),
+            tool_choice: None,
+        };
+
+        let bridge = to_bridge_request(&request).unwrap();
+        assert!(matches!(
+            &bridge.messages[0].parts[0],
+            BridgeMessagePart::ToolResult {
+                call_id,
+                tool_name,
+                output
+            } if call_id == "toolu_1" && tool_name.as_deref() == Some("bash") && output == "tool-pass"
         ));
     }
 
