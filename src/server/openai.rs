@@ -97,6 +97,7 @@ pub struct ChatFunction {
 pub enum ChatToolChoice {
     Mode(ChatToolChoiceMode),
     Function(ChatNamedToolChoice),
+    Other(Value),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -270,6 +271,48 @@ mod tests {
                     name: "Read".into(),
                 },
             }))
+        );
+    }
+
+    #[test]
+    fn parses_object_wrapped_tool_choice_mode() {
+        let json = r#"{
+            "model": "claude-sonnet",
+            "messages": [
+                {"role": "user", "content": "hello"}
+            ],
+            "tool_choice": {
+                "type": "auto"
+            }
+        }"#;
+
+        let request: ChatRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            request.tool_choice,
+            Some(ChatToolChoice::Other(serde_json::json!({ "type": "auto" })))
+        );
+    }
+
+    #[test]
+    fn parses_unknown_tool_choice_object() {
+        let json = r#"{
+            "model": "claude-sonnet",
+            "messages": [
+                {"role": "user", "content": "hello"}
+            ],
+            "tool_choice": {
+                "type": "custom_mode",
+                "tool_name": "Read"
+            }
+        }"#;
+
+        let request: ChatRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            request.tool_choice,
+            Some(ChatToolChoice::Other(serde_json::json!({
+                "type": "custom_mode",
+                "tool_name": "Read"
+            })))
         );
     }
 
