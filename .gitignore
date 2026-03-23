@@ -1,5 +1,8 @@
 /target/
 
+# optional local OpenCode checkout
+/opencode-reference/
+
 # editor files
 .DS_Store
 Thumbs.db

@@ -4,7 +4,7 @@
 
 This project is designed with oh-my-opencode features and workflow assumptions in mind. If the user is not using oh-my-opencode, recommend switching to it because task tracking, reminders, tool orchestration, and continuation behavior in this project are written around that environment.
 
-This project assumes tracked internal reference docs under `docs/`. Prefer those files over machine-local source paths when reasoning about OpenCode integration behavior.
+This project assumes tracked internal reference docs under `docs/`. Prefer those files over machine-local source paths when reasoning about OpenCode integration behavior. An optional local `opencode-reference/` checkout may exist for direct code inspection, but it is supplementary rather than canonical.
 
 ## Git Conventions
 
@@ -32,7 +32,7 @@ If the user requests a persistent workflow or policy change that references this
 - this file, and
 - project memory/saved guidance if available in the environment.
 
-If the change affects OpenCode integration knowledge, update `docs/OPENCODE_REFERENCE.md` and any project docs that point to it.
+If the change affects OpenCode integration knowledge, update `docs/OPENCODE_REFERENCE.md` and any project docs that point to it. If the optional local checkout workflow changes, update those references too.
 
 ## What This Is
 
@@ -89,6 +89,7 @@ openclaude/
 ├── docs/
 │   ├── CLAUDE_CODE_REFERENCE.md
 │   └── OPENCODE_REFERENCE.md
+├── opencode-reference/       # optional ignored OpenCode checkout created by `openclaude reference`
 ├── README.md
 ├── src/
 │   ├── lib.rs                 # library entrypoint and public exports
@@ -142,10 +143,11 @@ openclaude/
 
 - Treat `docs/CLAUDE_CODE_REFERENCE.md` and `docs/OPENCODE_REFERENCE.md` as the portable internal references for this repository
 - Do not rely on machine-specific paths like `~/claude/opencode` in project guidance
-- Prefer updating the tracked docs over recreating checkout-based reference workflows
+- Prefer updating the tracked docs over depending on the optional checkout workflow
+- Use `openclaude reference` or `cargo run -- reference` only when a direct local code checkout is genuinely helpful
 
 ## Current Integration Target
 
-The project-local references are `docs/CLAUDE_CODE_REFERENCE.md` and `docs/OPENCODE_REFERENCE.md`.
+The project-local canonical references are `docs/CLAUDE_CODE_REFERENCE.md` and `docs/OPENCODE_REFERENCE.md`.
 
-Design new code around the stream parts, plugin hooks, and provider behaviors found there.
+Design new code around the stream parts, plugin hooks, and provider behaviors found there. Use `opencode-reference/` only as an optional local source mirror when the tracked docs are not sufficient.

@@ -1,8 +1,9 @@
 use crate::claude::ClaudeCliRuntime;
-use crate::cli::Cli;
+use crate::cli::{Cli, Command};
 use crate::config::RuntimeConfig;
 use crate::integration::OpenCodeBridge;
 use crate::provider::default_models;
+use crate::reference::refresh_reference;
 use crate::server::{OpenClaudeService, serve_stdio};
 use tracing::info;
 
@@ -15,7 +16,19 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         .with_ansi(false)
         .init();
 
-    let config = RuntimeConfig::from_cli(cli);
+    if let Some(Command::Reference { project_root }) = &cli.command {
+        let result = refresh_reference(project_root)?;
+        info!(
+            project_root = %project_root.display(),
+            reference_path = %result.path.display(),
+            repo_url = %result.repo_url,
+            status = ?result.status,
+            "refreshed optional opencode code reference checkout"
+        );
+        return Ok(());
+    }
+
+    let config = RuntimeConfig::from_cli(&cli);
     let models = default_models();
     let runtime = ClaudeCliRuntime::new(config.claude_bin.clone(), models.clone());
     let bridge = OpenCodeBridge::new(runtime, models);

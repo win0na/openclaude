@@ -43,6 +43,7 @@ the project currently provides:
 - adapter and bridge entrypoints
 - a standalone service core for start/resume flows
 - tracked internal reference docs under `docs/`
+- an optional local OpenCode checkout under `opencode-reference/` for direct source inspection
 - a stateless complete-request protocol that expects full OpenCode-owned history on every call
 
 ## reference docs
@@ -51,6 +52,18 @@ Use the tracked reference docs in `docs/` when implementing backend or integrati
 
 - `docs/CLAUDE_CODE_REFERENCE.md`
 - `docs/OPENCODE_REFERENCE.md`
+
+## optional local code reference
+
+If you want a direct source checkout for inspection, use:
+
+```bash
+cargo run -- reference
+```
+
+This recreates or refreshes a gitignored `opencode-reference/` checkout at the project root.
+
+The tracked docs in `docs/` remain the canonical portable references; the checkout is optional and local-only.
 
 ## commands
 
