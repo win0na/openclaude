@@ -1,11 +1,12 @@
 use crate::claude::ClaudeCliRuntime;
 use crate::cli::{Cli, Command};
+use crate::console;
 use crate::config::RuntimeConfig;
 use crate::integration::OpenCodeBridge;
 use crate::provider::default_models;
 use crate::reference::refresh_reference;
 use crate::server::{OpenClaudeService, create_router, serve_stdio};
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, Write};
 use std::net::SocketAddr;
 use tracing::info;
 
@@ -15,13 +16,13 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "openclaude=info".into()),
         )
-        .with_ansi(false)
+        .with_ansi(console::stderr_color_enabled())
         .init();
 
     match &cli.command {
         Some(Command::Help) | None => {
             let mut stdout = io::stdout().lock();
-            let help = crate::cli::detailed_help(stdout.is_terminal());
+            let help = crate::cli::detailed_help();
             stdout.write_all(help.as_bytes())?;
             stdout.write_all(b"\n")?;
             Ok(())
