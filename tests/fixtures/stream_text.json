@@ -1,0 +1,10 @@
+{
+  "model": "sonnet",
+  "messages": [
+    {
+      "role": "user",
+      "content": "say hello"
+    }
+  ],
+  "stream": true
+}

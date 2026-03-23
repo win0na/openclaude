@@ -1,0 +1,34 @@
+{
+  "model": "opus",
+  "messages": [
+    {
+      "role": "user",
+      "content": "run a random tool. i'm testing tool integration"
+    }
+  ],
+  "stream": true,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "Read",
+        "description": "Read a file",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "type": "string"
+            }
+          },
+          "required": ["file_path"]
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "function",
+    "function": {
+      "name": "Read"
+    }
+  }
+}

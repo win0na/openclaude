@@ -1,0 +1,29 @@
+{
+  "model": "sonnet",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "toolu_1",
+          "type": "function",
+          "function": {
+            "name": "Read",
+            "arguments": "{\"file_path\":\"/tmp/a\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "toolu_1",
+      "content": "file contents"
+    },
+    {
+      "role": "user",
+      "content": "summarize it"
+    }
+  ],
+  "stream": false
+}
