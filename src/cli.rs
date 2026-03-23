@@ -1,4 +1,4 @@
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Parser)]
@@ -36,56 +36,45 @@ pub enum Command {
     Stdio,
 }
 
-const DETAILED_HELP_GUIDE: &str = r#"quick guide
+const DETAILED_HELP_GUIDE: &str = r#"openclaude
 
-openclaude is a translation layer between OpenCode and Claude Code. commands stay explicit: nothing starts a server or stdio bridge unless you invoke that command directly.
+Usage:
+  openclaude [OPTIONS] [COMMAND]
 
-primary command
+Example:
+  openclaude serve
 
-- `serve` is the primary command.
-  use it for the normal no-patch OpenCode integration flow.
+Commands:
+  help
+      print the detailed help page
 
-commands
+  reference
+      refresh the optional local opencode checkout
 
-- serve
-  start the OpenAI-compatible HTTP server. this is the primary command for real OpenCode provider integration.
+  serve
+      start the HTTP server; primary integration command
 
-- stdio
-  run the line-oriented stdio bridge. use this for direct subprocess integration or debugging.
+  stdio
+      start the stdio bridge explicitly
 
-- reference
-  refresh the optional local `opencode-reference/` checkout for source inspection.
+Options:
+  --provider-id <PROVIDER_ID>
+      [env: OPENCLAUDE_PROVIDER_ID=] [default: openclaude]
 
-- help
-  print this detailed help page.
+  --default-model <DEFAULT_MODEL>
+      [env: OPENCLAUDE_MODEL=] [default: sonnet]
 
-common examples
+  --claude-bin <CLAUDE_BIN>
+      [env: OPENCLAUDE_CLAUDE_BIN=] [default: claude]
 
-- `openclaude serve`
-  start the HTTP server on `127.0.0.1:3000`.
+  --workdir <WORKDIR>
+      [env: OPENCLAUDE_WORKDIR=] [default: /tmp/openclaude]
 
-- `openclaude serve --host 0.0.0.0 --port 3000`
-  expose the HTTP server on a custom interface and port.
-
-- `openclaude stdio`
-  start the stdio bridge explicitly.
-
-- `openclaude reference`
-  refresh the optional local OpenCode checkout.
-
-notes
-
-- bare `openclaude` prints help instead of starting a transport.
-- `serve` is the primary integration path for no-patch OpenCode usage.
-- `stdio` remains available as an explicit developer transport."#;
+  -h, --help
+      print help"#;
 
 pub fn detailed_help() -> String {
-    let mut command = Cli::command();
-    let mut help = Vec::new();
-    command.write_long_help(&mut help).expect("write help");
-    let help = String::from_utf8(help).expect("utf8 help");
-
-    format!("{help}\n\n{DETAILED_HELP_GUIDE}")
+    DETAILED_HELP_GUIDE.to_string()
 }
 
 #[cfg(test)]
@@ -96,10 +85,12 @@ mod tests {
     fn detailed_help_mentions_explicit_commands() {
         let help = detailed_help();
 
+        assert!(help.contains("Usage:"));
+        assert!(help.contains("Example:"));
         assert!(help.contains("openclaude serve"));
-        assert!(help.contains("openclaude stdio"));
-        assert!(help.contains("`serve` is the primary command"));
-        assert!(help.contains("bare `openclaude` prints help"));
+        assert!(help.contains("  stdio\n      start the stdio bridge explicitly"));
+        assert!(help.contains("primary integration command"));
+        assert!(!help.contains("quick guide"));
     }
 
     #[test]
