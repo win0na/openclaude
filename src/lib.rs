@@ -1,4 +1,5 @@
 pub mod app;
+pub mod bootstrap;
 pub mod claude;
 pub mod cli;
 pub mod console;
