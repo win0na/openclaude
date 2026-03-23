@@ -1,5 +1,6 @@
 use crate::console;
 use clap::{Parser, Subcommand};
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Parser)]
@@ -17,12 +18,26 @@ pub struct Cli {
     #[arg(long, env = "OPENCLAUDE_CLAUDE_BIN", default_value = "claude")]
     pub claude_bin: PathBuf,
 
+    #[arg(long, env = "OPENCLAUDE_OPENCODE_BIN", default_value = "opencode")]
+    pub opencode_bin: PathBuf,
+
+    #[arg(
+        long,
+        env = "OPENCLAUDE_BASE_URL",
+        default_value = "http://127.0.0.1:3000/v1"
+    )]
+    pub base_url: String,
+
     #[arg(long, env = "OPENCLAUDE_WORKDIR", default_value = "/tmp/openclaude")]
     pub workdir: PathBuf,
 }
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum Command {
+    Bootstrap {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<OsString>,
+    },
     Help,
     Reference {
         #[arg(long, default_value = ".")]
@@ -35,6 +50,8 @@ pub enum Command {
         port: u16,
     },
     Stdio,
+    #[command(external_subcommand)]
+    External(Vec<OsString>),
 }
 
 fn command_line(style: console::Style, name: &str, description: &str) -> String {
@@ -62,20 +79,21 @@ fn render_detailed_help(style: console::Style) -> String {
         format!("  {}", style.command("openclaude [OPTIONS] [COMMAND]")),
         String::new(),
         style.heading("Example:"),
-        format!("  {}", style.command("openclaude serve")),
+        format!("  {}", style.command("openclaude")),
         String::new(),
         style.heading("Commands:"),
+        command_line(
+            style,
+            "bootstrap",
+            "launch opencode with bootstrap config and plugin",
+        ),
         command_line(style, "help", "print the detailed help page"),
         command_line(
             style,
             "reference",
             "refresh the optional local opencode checkout",
         ),
-        command_line(
-            style,
-            "serve",
-            "start the HTTP server; primary integration command",
-        ),
+        command_line(style, "serve", "start the HTTP backend server"),
         command_line(style, "stdio", "start the stdio bridge explicitly"),
         String::new(),
         style.heading("Options:"),
@@ -93,6 +111,16 @@ fn render_detailed_help(style: console::Style) -> String {
             style,
             "--claude-bin <CLAUDE_BIN>",
             "[env: OPENCLAUDE_CLAUDE_BIN=] [default: claude]",
+        ),
+        option_line(
+            style,
+            "--opencode-bin <OPENCODE_BIN>",
+            "[env: OPENCLAUDE_OPENCODE_BIN=] [default: opencode]",
+        ),
+        option_line(
+            style,
+            "--base-url <BASE_URL>",
+            "[env: OPENCLAUDE_BASE_URL=] [default: http://127.0.0.1:3000/v1]",
         ),
         option_line(
             style,
@@ -118,10 +146,11 @@ mod tests {
 
         assert!(help.contains("Usage:"));
         assert!(help.contains("Example:"));
-        assert!(help.contains("openclaude serve"));
+        assert!(help.contains("openclaude"));
+        assert!(help.contains("bootstrap"));
+        assert!(help.contains("launch opencode with bootstrap config and plugin"));
         assert!(help.contains("stdio"));
         assert!(help.contains("start the stdio bridge explicitly"));
-        assert!(help.contains("primary integration command"));
         assert!(!help.contains("quick guide"));
     }
 
@@ -137,5 +166,17 @@ mod tests {
         let cli = Cli::try_parse_from(["openclaude", "help"]).expect("parse help");
 
         assert!(matches!(cli.command, Some(Command::Help)));
+    }
+
+    #[test]
+    fn captures_external_subcommand_for_opencode_passthrough() {
+        let cli = Cli::try_parse_from(["openclaude", "run", "hello"]).expect("parse passthrough");
+
+        match cli.command {
+            Some(Command::External(args)) => {
+                assert_eq!(args, vec![OsString::from("run"), OsString::from("hello")]);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
     }
 }

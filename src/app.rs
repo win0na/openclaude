@@ -1,4 +1,5 @@
 use crate::claude::ClaudeCliRuntime;
+use crate::bootstrap::launch_opencode;
 use crate::cli::{Cli, Command};
 use crate::console;
 use crate::config::RuntimeConfig;
@@ -20,7 +21,10 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         .init();
 
     match &cli.command {
-        Some(Command::Help) | None => {
+        None => launch_opencode(&cli, &[]),
+        Some(Command::Bootstrap { args }) => launch_opencode(&cli, args),
+        Some(Command::External(args)) => launch_opencode(&cli, args),
+        Some(Command::Help) => {
             let mut stdout = io::stdout().lock();
             let help = crate::cli::detailed_help();
             stdout.write_all(help.as_bytes())?;
