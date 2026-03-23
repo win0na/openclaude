@@ -115,7 +115,9 @@ Current internal layering in `openclaude`:
 - `integration/`
   - adapter and bridge boundary types
 - `server/`
-  - standalone protocol and stdio service
+  - HTTP server with OpenAI-compatible endpoints
+  - stdio service for direct process communication
+  - OpenAI-compatible request/response types
 
 Expected eventual no-patch integration shape:
 
@@ -124,6 +126,104 @@ Expected eventual no-patch integration shape:
 3. the plugin sends full history to `openclaude`
 4. `openclaude` returns translated events
 5. OpenCode keeps owning sessions, tool execution, and visible history
+
+## HTTP server protocol
+
+`openclaude` exposes an OpenAI-compatible HTTP API for integration with OpenCode.
+
+### endpoints
+
+- `POST /v1/chat/completions` - chat completions (streaming and non-streaming)
+- `GET /v1/models` - list available models
+- `GET /health` - health check
+
+### request format
+
+The server accepts standard OpenAI chat completion requests:
+
+```json
+{
+  "model": "claude-sonnet",
+  "messages": [
+    {"role": "user", "content": "hello"}
+  ],
+  "stream": true
+}
+```
+
+### response format
+
+Non-streaming responses follow the OpenAI format:
+
+```json
+{
+  "id": "chatcmpl-xxx",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "claude-sonnet",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": "hello!"},
+      "finish_reason": "stop"
+    }
+  ]
+}
+```
+
+Streaming responses use SSE with `data: {...}` lines and `data: [DONE]` at the end.
+
+### tool calls
+
+Tool calls are returned in the OpenAI format:
+
+```json
+{
+  "choices": [{
+    "message": {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [{
+        "id": "toolu_xxx",
+        "type": "function",
+        "function": {
+          "name": "Read",
+          "arguments": "{\"file_path\": \"/tmp/a\"}"
+        }
+      }]
+    },
+    "finish_reason": "tool_calls"
+  }]
+}
+```
+
+## OpenCode configuration
+
+To use `openclaude` as a provider in OpenCode:
+
+1. Start the HTTP server:
+   ```bash
+   openclaude serve --host 127.0.0.1 --port 3000
+   ```
+
+2. Configure OpenCode to use the provider (in `opencode.json` or via environment):
+   - set `baseURL` to `http://127.0.0.1:3000/v1`
+   - the provider will appear as an OpenAI-compatible endpoint
+
+3. Install the plugin (optional):
+   - the plugin handles auth headers and session context
+   - it's thin and doesn't implement provider logic
+
+### provider routing
+
+OpenCode routes to providers based on:
+- provider ID in the model selection
+- baseURL in the provider configuration
+- the AI SDK's `createOpenAICompatible` for custom endpoints
+
+The plugin should not try to register a new provider runtime. Instead:
+- let OpenCode's config define the routing
+- use the plugin only for auth/headers/transforms
 
 ## current backend contract expectations
 
