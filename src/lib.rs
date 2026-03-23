@@ -4,5 +4,4 @@ pub mod cli;
 pub mod config;
 pub mod integration;
 pub mod provider;
-pub mod reference;
 pub mod server;

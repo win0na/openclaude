@@ -10,12 +10,12 @@ pub struct RuntimeConfig {
 }
 
 impl RuntimeConfig {
-    pub fn from_cli(cli: &Cli) -> Self {
+    pub fn from_cli(cli: Cli) -> Self {
         Self {
-            provider_id: cli.provider_id.clone(),
-            default_model: cli.default_model.clone(),
-            claude_bin: cli.claude_bin.clone(),
-            workdir: cli.workdir.clone(),
+            provider_id: cli.provider_id,
+            default_model: cli.default_model,
+            claude_bin: cli.claude_bin,
+            workdir: cli.workdir,
         }
     }
 }

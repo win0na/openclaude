@@ -4,7 +4,7 @@
 
 This project is designed with oh-my-opencode features and workflow assumptions in mind. If the user is not using oh-my-opencode, recommend switching to it because task tracking, reminders, tool orchestration, and continuation behavior in this project are written around that environment.
 
-This project also assumes a project-local OpenCode reference checkout at `opencode-reference/`. Prefer that local checkout over machine-local source paths when reasoning about OpenCode integration behavior.
+This project assumes tracked internal reference docs under `docs/`. Prefer those files over machine-local source paths when reasoning about OpenCode integration behavior.
 
 ## Git Conventions
 
@@ -32,7 +32,7 @@ If the user requests a persistent workflow or policy change that references this
 - this file, and
 - project memory/saved guidance if available in the environment.
 
-If the change affects OpenCode integration knowledge, update the local reference-checkout workflow and any project docs that point to `opencode-reference/`.
+If the change affects OpenCode integration knowledge, update `docs/OPENCODE_REFERENCE.md` and any project docs that point to it.
 
 ## What This Is
 
@@ -87,7 +87,9 @@ rustup component add rust-analyzer
 openclaude/
 ├── Cargo.toml
 ├── AGENTS.md
-├── opencode-reference/       # local ignored OpenCode checkout created by init
+├── docs/
+│   ├── CLAUDE_CODE_REFERENCE.md
+│   └── OPENCODE_REFERENCE.md
 ├── README.md
 ├── src/
 │   ├── lib.rs                 # library entrypoint and public exports
@@ -104,7 +106,7 @@ openclaude/
 │   │   ├── cli.rs             # process spawning and argument building
 │   │   └── stream.rs          # Claude stream-json parsing
 │   └── integration/
-│       └── opencode.rs        # documented integration targets mirrored into the local reference sheet
+│       └── opencode.rs        # integration targets that should stay aligned with docs/OPENCODE_REFERENCE.md
 ```
 
 ## Architecture Expectations
@@ -118,7 +120,7 @@ openclaude/
 ## Code Style
 
 - Favor small modules with explicit types and narrow responsibilities
-- Avoid speculative compatibility layers; tie behavior to evidence from the local `opencode-reference/` checkout and mirrored integration notes in this repository
+- Avoid speculative compatibility layers; tie behavior to evidence from `docs/CLAUDE_CODE_REFERENCE.md`, `docs/OPENCODE_REFERENCE.md`, and mirrored integration notes in this repository
 - Use doc comments only where the public API or non-obvious invariants need them
 - Keep tests focused on protocol mapping and stream behavior rather than incidental implementation details
 
@@ -139,13 +141,12 @@ openclaude/
 
 ## Reference Sheet
 
-- Treat `opencode-reference/` at the project root as the portable local OpenCode integration reference for this repository
+- Treat `docs/CLAUDE_CODE_REFERENCE.md` and `docs/OPENCODE_REFERENCE.md` as the portable internal references for this repository
 - Do not rely on machine-specific paths like `~/claude/opencode` in project guidance
-- Refresh the reference checkout with `openclaude reference` or `cargo run -- reference` when bootstrapping the project on a new machine
-- If project tooling refreshes the reference on init, prefer the refreshed local checkout over memory or imperative filesystem assumptions
+- Prefer updating the tracked docs over recreating checkout-based reference workflows
 
 ## Current Integration Target
 
-The project-local reference implementation is the checkout in `opencode-reference/`.
+The project-local references are `docs/CLAUDE_CODE_REFERENCE.md` and `docs/OPENCODE_REFERENCE.md`.
 
 Design new code around the stream parts, plugin hooks, and provider behaviors found there.

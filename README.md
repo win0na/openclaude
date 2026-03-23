@@ -42,14 +42,15 @@ the project currently provides:
 - provider runtime and session orchestration layers
 - adapter and bridge entrypoints
 - a standalone service core for start/resume flows
-- a project-local OpenCode reference checkout under `opencode-reference/` after initialization
+- tracked internal reference docs under `docs/`
 - a stateless complete-request protocol that expects full OpenCode-owned history on every call
 
-## reference checkout
+## reference docs
 
-use `cargo run -- reference` to create or refresh a local OpenCode reference checkout in `opencode-reference/` at the project root.
+Use the tracked reference docs in `docs/` when implementing backend or integration changes:
 
-that checkout is ignored by git and exists only as local integration context for this project.
+- `docs/CLAUDE_CODE_REFERENCE.md`
+- `docs/OPENCODE_REFERENCE.md`
 
 ## commands
 
