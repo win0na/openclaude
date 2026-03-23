@@ -10,7 +10,7 @@ This project assumes tracked internal reference docs under `docs/`. Prefer those
 
 When committing is explicitly requested, use format: `topic: short description`. For large changes, use a multi-line message where the first line is the short label and the body describes changes in detail, utilizing a bulleted list.
 
-When the agent makes a verified change themselves in this project, create a git commit for that logical change immediately after verification. Keep commits atomic and follow the project commit format.
+Do not create commits for agent-made changes unless the user explicitly asks for a commit. When a commit is requested, keep it atomic and follow the project commit format.
 
 Do not add AI co-author trailers, AI attribution footers, or similar AI-made-by headers to commits for this project. AI-made changes should not be co-authored by AI in git history.
 
