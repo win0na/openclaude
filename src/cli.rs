@@ -40,10 +40,15 @@ const DETAILED_HELP_GUIDE: &str = r#"quick guide
 
 openclaude is a translation layer between OpenCode and Claude Code. commands stay explicit: nothing starts a server or stdio bridge unless you invoke that command directly.
 
+primary command
+
+- `serve` is the primary command.
+  use it for the normal no-patch OpenCode integration flow.
+
 commands
 
 - serve
-  start the OpenAI-compatible HTTP server. use this for real OpenCode provider integration.
+  start the OpenAI-compatible HTTP server. this is the primary command for real OpenCode provider integration.
 
 - stdio
   run the line-oriented stdio bridge. use this for direct subprocess integration or debugging.
@@ -93,6 +98,7 @@ mod tests {
 
         assert!(help.contains("openclaude serve"));
         assert!(help.contains("openclaude stdio"));
+        assert!(help.contains("`serve` is the primary command"));
         assert!(help.contains("bare `openclaude` prints help"));
     }
 
