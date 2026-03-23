@@ -36,6 +36,7 @@ pub struct BridgeToolResult {
     pub output: Value,
 }
 
+#[derive(Clone)]
 pub struct OpenCodeBridge<R: ProviderRuntime> {
     adapter: OpenCodeAdapter<R>,
     provider: ProviderInfo,

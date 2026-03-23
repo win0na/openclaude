@@ -3,23 +3,31 @@ use crate::provider::ProviderRuntime;
 use crate::server::{
     ServerContinueRequest, ServerMetadata, ServerModel, ServerRequest, ServerResponse,
 };
+use std::collections::HashMap;
 
-pub struct OpenClaudeService<R: ProviderRuntime> {
-    bridge: OpenCodeBridge<R>,
+pub struct OpenClaudeService<R: ProviderRuntime + Clone> {
+    template: OpenCodeBridge<R>,
+    sessions: HashMap<String, OpenCodeBridge<R>>,
+    next_session_id: u64,
 }
 
-impl<R: ProviderRuntime> OpenClaudeService<R> {
+impl<R: ProviderRuntime + Clone> OpenClaudeService<R> {
     pub fn new(bridge: OpenCodeBridge<R>) -> Self {
-        Self { bridge }
+        Self {
+            template: bridge,
+            sessions: HashMap::new(),
+            next_session_id: 1,
+        }
     }
 
     pub fn describe(&self) -> ServerResponse {
         ServerResponse {
+            session_id: None,
             metadata: Some(ServerMetadata {
-                provider_id: self.bridge.provider_info().id.clone(),
-                provider_name: self.bridge.provider_info().name.clone(),
+                provider_id: self.template.provider_info().id.clone(),
+                provider_name: self.template.provider_info().name.clone(),
                 models: self
-                    .bridge
+                    .template
                     .models()
                     .into_iter()
                     .map(ServerModel::from)
@@ -33,16 +41,45 @@ impl<R: ProviderRuntime> OpenClaudeService<R> {
     }
 
     pub fn start(&mut self, request: ServerRequest) -> anyhow::Result<ServerResponse> {
+        let session_id = format!("session-{}", self.next_session_id);
+        self.next_session_id += 1;
+
+        let mut bridge = self.template.clone();
+        let response_step = bridge.start(request.conversation)?;
+        let should_keep = !matches!(
+            response_step.state,
+            crate::integration::AdapterSessionState::Finished
+        );
+        if should_keep {
+            self.sessions.insert(session_id.clone(), bridge);
+        }
+
         Ok(ServerResponse {
+            session_id: Some(session_id),
             metadata: None,
-            step: self.bridge.start(request.conversation)?,
+            step: response_step,
         })
     }
 
     pub fn resume(&mut self, request: ServerContinueRequest) -> anyhow::Result<ServerResponse> {
+        let mut bridge = self
+            .sessions
+            .remove(&request.session_id)
+            .ok_or_else(|| anyhow::anyhow!("unknown session id: {}", request.session_id))?;
+        let response_step = bridge.submit_tool_result(request.tool_result)?;
+        let session_id = request.session_id;
+        let should_keep = !matches!(
+            response_step.state,
+            crate::integration::AdapterSessionState::Finished
+        );
+        if should_keep {
+            self.sessions.insert(session_id.clone(), bridge);
+        }
+
         Ok(ServerResponse {
+            session_id: Some(session_id),
             metadata: None,
-            step: self.bridge.submit_tool_result(request.tool_result)?,
+            step: response_step,
         })
     }
 }
@@ -161,9 +198,11 @@ mod tests {
                 .iter()
                 .any(|event| matches!(event, AdapterEvent::ToolCall(_)))
         );
+        let session_id = first.session_id.clone().unwrap();
 
         let second = service
             .resume(ServerContinueRequest {
+                session_id: session_id.clone(),
                 tool_result: BridgeToolResult {
                     call_id: "toolu_1".into(),
                     tool_name: Some("Read".into()),
@@ -173,6 +212,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(second.step.state, AdapterSessionState::Finished);
+        assert_eq!(second.session_id.as_deref(), Some(session_id.as_str()));
         assert!(*resumed.lock().unwrap());
     }
 
@@ -193,6 +233,32 @@ mod tests {
         assert_eq!(metadata.provider_id, "mock");
         assert_eq!(metadata.models.len(), 1);
         assert_eq!(metadata.models[0].id, "sonnet");
+        assert_eq!(response.session_id, None);
         assert_eq!(response.step.state, AdapterSessionState::Ready);
+    }
+
+    #[test]
+    fn service_rejects_unknown_session_on_resume() {
+        let model = ProviderModel::claude("sonnet", "Claude Sonnet");
+        let runtime = MockRuntime {
+            model: model.clone(),
+            continuation: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            resumed: std::sync::Arc::new(std::sync::Mutex::new(false)),
+        };
+        let bridge = OpenCodeBridge::new(runtime, vec![model]);
+        let mut service = OpenClaudeService::new(bridge);
+
+        let err = service
+            .resume(ServerContinueRequest {
+                session_id: "missing".into(),
+                tool_result: BridgeToolResult {
+                    call_id: "toolu_1".into(),
+                    tool_name: Some("Read".into()),
+                    output: json!({"content": "file"}),
+                },
+            })
+            .unwrap_err();
+
+        assert!(err.to_string().contains("unknown session id"));
     }
 }

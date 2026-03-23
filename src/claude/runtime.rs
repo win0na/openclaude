@@ -19,6 +19,7 @@ struct SuspendedToolSession {
     tool_call: ToolCallPart,
 }
 
+#[derive(Clone)]
 pub struct ClaudeCliRuntime {
     info: ProviderInfo,
     cli: ClaudeCli,

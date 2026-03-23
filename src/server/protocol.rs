@@ -25,11 +25,13 @@ pub struct ServerRequest {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ServerContinueRequest {
+    pub session_id: String,
     pub tool_result: BridgeToolResult,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ServerResponse {
+    pub session_id: Option<String>,
     pub metadata: Option<ServerMetadata>,
     pub step: AdapterStep,
 }

@@ -13,6 +13,7 @@ pub struct SessionStep {
     pub state: SessionState,
 }
 
+#[derive(Clone)]
 pub struct ProviderSession<R: ProviderRuntime> {
     runtime: R,
     state: SessionState,

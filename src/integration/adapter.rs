@@ -42,6 +42,7 @@ pub struct AdapterStep {
     pub state: AdapterSessionState,
 }
 
+#[derive(Clone)]
 pub struct OpenCodeAdapter<R: ProviderRuntime> {
     session: ProviderSession<R>,
 }
