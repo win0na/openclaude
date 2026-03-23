@@ -251,6 +251,10 @@ The plugin can create or update the user's OpenCode config so the `openclaude` p
 - best fit if we want the plugin to feel automatic
 - still config-backed under the hood
 - no OpenCode patching required
+- safest target is the global config file under `~/.config/opencode/`
+- if `opencode.jsonc` exists, preserve it and patch only the missing provider fields
+- if no global config exists, create `opencode.jsonc`
+- current implementation target is provider id `openclaude` with `haiku`, `sonnet`, and `opus` model entries backed by `@ai-sdk/openai-compatible`
 
 #### option 2: CLI bootstrap command
 
@@ -284,6 +288,8 @@ For the current repository, the best practical path is:
 2. add a bootstrap path that creates the provider config automatically
 3. keep the plugin focused on auth, headers, params, and transforms
 4. avoid designing around unsupported dynamic provider registration
+
+The current implementation direction is plugin-managed global config bootstrap.
 
 ## current backend contract expectations
 

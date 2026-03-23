@@ -40,6 +40,10 @@ practical setup options for this project are:
 
 true dynamic provider registration from a plugin is not currently supported by the verified OpenCode code surface.
 
+the current plugin direction uses plugin-managed config bootstrap by ensuring a global provider entry exists in the user's OpenCode config before runtime request hooks are used.
+
+by default the plugin bootstraps `~/.config/opencode/opencode.jsonc` and ensures an `openclaude` provider with `haiku`, `sonnet`, and `opus` model entries points at `http://127.0.0.1:3000/v1`.
+
 ## status
 
 the project currently provides:
@@ -81,6 +85,7 @@ The intended frontend lives in `plugin/` and should stay thin.
 Its job is to:
 
 - integrate with OpenCode's plugin hooks
+- ensure a global `openclaude` provider entry exists in OpenCode config
 - handle auth, headers, params, and message transforms
 - forward full history to the Rust backend
 
