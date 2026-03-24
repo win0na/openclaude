@@ -616,7 +616,7 @@ mod tests {
     }
 
     #[test]
-    fn builds_non_streaming_response() {
+    fn builds_response() {
         let model = ProviderModel::claude("sonnet", "Claude Sonnet");
         let runtime = MockRuntime {
             model: model.clone(),
@@ -644,14 +644,14 @@ mod tests {
     }
 
     #[test]
-    fn maps_internal_finish_reasons_to_openai_values() {
+    fn maps_finish() {
         assert_eq!(map_finish_reason("end_turn"), "stop");
         assert_eq!(map_finish_reason("tool_call"), "tool_calls");
         assert_eq!(map_finish_reason("error"), "error");
     }
 
     #[test]
-    fn tool_start_chunk_includes_function_object_and_type() {
+    fn chunk_start() {
         let json = make_tool_start_with_name_chunk("chatcmpl-1", 1, "opus", 0, "toolu_1", "Read");
         let chunk: ChatChunk = serde_json::from_str(&json).unwrap();
         let tool_call = chunk.choices[0].delta.tool_calls.as_ref().unwrap()[0].clone();
@@ -668,7 +668,7 @@ mod tests {
     }
 
     #[test]
-    fn tool_args_chunk_never_emits_invalid_function_name() {
+    fn chunk_args() {
         let json = make_tool_args_chunk("chatcmpl-1", 1, "opus", 0, r#"{"file_path":"/tmp/a"}"#);
         let chunk: ChatChunk = serde_json::from_str(&json).unwrap();
         let tool_call = chunk.choices[0].delta.tool_calls.as_ref().unwrap()[0].clone();
@@ -677,7 +677,7 @@ mod tests {
     }
 
     #[test]
-    fn bridge_request_preserves_assistant_tool_calls() {
+    fn preserves_calls() {
         let request = ChatRequest {
             model: "sonnet".into(),
             messages: vec![ChatMessage {
@@ -710,7 +710,7 @@ mod tests {
     }
 
     #[test]
-    fn bridge_request_maps_tool_messages_to_tool_results() {
+    fn maps_tools() {
         let request = ChatRequest {
             model: "sonnet".into(),
             messages: vec![ChatMessage {

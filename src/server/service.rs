@@ -88,7 +88,7 @@ mod tests {
     }
 
     #[test]
-    fn service_describe_reports_provider_and_models() {
+    fn service_describe() {
         let model = ProviderModel::claude("sonnet", "Claude Sonnet");
         let runtime = MockRuntime {
             model: model.clone(),

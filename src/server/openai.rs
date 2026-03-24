@@ -198,7 +198,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_chat_request() {
+    fn parses_chat() {
         let json = r#"{
             "model": "claude-sonnet",
             "messages": [
@@ -214,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_string_tool_choice() {
+    fn parses_string() {
         let json = r#"{
             "model": "claude-sonnet",
             "messages": [
@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_function_tool_choice() {
+    fn parses_function() {
         let json = r#"{
             "model": "claude-sonnet",
             "messages": [
@@ -251,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_object_wrapped_tool_choice_mode() {
+    fn parses_wrapped() {
         let json = r#"{
             "model": "claude-sonnet",
             "messages": [
@@ -270,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_unknown_tool_choice_object() {
+    fn parses_unknown() {
         let json = r#"{
             "model": "claude-sonnet",
             "messages": [
@@ -293,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn formats_chat_response() {
+    fn formats_response() {
         let response = ChatResponse {
             id: "chatcmpl-123".into(),
             object: "chat.completion".into(),

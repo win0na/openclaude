@@ -23,14 +23,14 @@ fn fixture(name: &str) -> String {
 }
 
 #[test]
-fn parses_basic_chat_fixture() {
+fn parses_basic() {
     let request: ChatRequest = serde_json::from_str(&fixture("basic_chat.json")).unwrap();
     assert_eq!(request.model, "sonnet");
     assert!(!request.stream);
 }
 
 #[test]
-fn parses_tool_choice_function_fixture() {
+fn parses_choice() {
     let request: ChatRequest =
         serde_json::from_str(&fixture("tool_choice_function.json")).unwrap();
     assert_eq!(request.model, "opus");
@@ -40,7 +40,7 @@ fn parses_tool_choice_function_fixture() {
 }
 
 #[test]
-fn parses_assistant_tool_history_fixture() {
+fn parses_history() {
     let request: ChatRequest =
         serde_json::from_str(&fixture("assistant_tool_history.json")).unwrap();
     assert_eq!(request.messages.len(), 3);
@@ -171,7 +171,7 @@ impl ProviderRuntime for ToolRuntime {
 }
 
 #[tokio::test]
-async fn http_session_returns_basic_chat_completion() {
+async fn http_completion() {
     let model = ProviderModel::claude("sonnet", "Claude Sonnet");
     let router = create_router(OpenCodeBridge::new(
         TextRuntime {
@@ -203,7 +203,7 @@ async fn http_session_returns_basic_chat_completion() {
 }
 
 #[tokio::test]
-async fn http_session_streams_tool_call_chunks_with_openai_shape() {
+async fn http_stream() {
     let model = ProviderModel::claude("sonnet", "Claude Sonnet");
     let router = create_router(OpenCodeBridge::new(
         ToolRuntime {
@@ -238,7 +238,7 @@ async fn http_session_streams_tool_call_chunks_with_openai_shape() {
 }
 
 #[test]
-fn service_completes_one_request_from_full_history() {
+fn service_history() {
     let model = ProviderModel::claude("sonnet", "Claude Sonnet");
     let bridge = OpenCodeBridge::new(
         ServiceToolRuntime {
@@ -272,7 +272,7 @@ fn service_completes_one_request_from_full_history() {
 }
 
 #[test]
-fn serve_stdio_handles_describe_and_complete() {
+fn stdio_complete() {
     let model = ProviderModel::claude("sonnet", "Claude Sonnet");
     let bridge = OpenCodeBridge::new(
         ToolRuntime {
