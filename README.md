@@ -118,8 +118,13 @@ cargo test
 cargo build
 cargo run -- help
 cargo run --
+cargo run -- bootstrap
 cargo run -- serve
 ```
+
+Bare `openclaude` now starts the local OpenClaude HTTP server in the background and then launches OpenCode against it. Use `openclaude bootstrap` to launch the bootstrap/client path without starting the server, and `openclaude serve` to run only the provider server.
+
+The default local server URL is `http://127.0.0.1:43123/v1`.
 
 ## Claude CLI Requirements
 
@@ -127,12 +132,12 @@ cargo run -- serve
 
 ## Benchmark
 
-`openclaude benchmark` compares raw `claude` CLI latency against `openclaude` in three separate modes so cold boot cost, warm session cost, and direct request cost are not mixed together.
+`openclaude benchmark` compares raw `claude` CLI latency against `openclaude` with translation-only benchmarking as the default path, while keeping OpenCode session overhead as a separate integration metric.
 
 ```bash
 openclaude benchmark
-openclaude benchmark --mode warm-session
-openclaude benchmark --mode request-path
+openclaude benchmark --mode translation
+openclaude benchmark --mode opencode-session
 openclaude benchmark --iterations 10 --warmups 1
 openclaude benchmark --model sonnet --max-first-ms 250 --max-total-ms 300
 ```
@@ -140,8 +145,8 @@ openclaude benchmark --model sonnet --max-first-ms 250 --max-total-ms 300
 Benchmark modes:
 
 - `all`: run every mode below
-- `warm-session`: default mode; reuse one prepared benchmark workspace and one long-lived sidecar, but create a fresh OpenCode session for each sample
-- `request-path`: measure only the `openclaude serve` HTTP translation path against raw `claude`
+- `translation`: default mode; measure only the `openclaude serve` translation path against raw `claude`
+- `opencode-session`: reuse one prepared benchmark workspace and one long-lived sidecar, but create a fresh OpenCode session for each sample
 
 The benchmark assumes a real `claude` CLI environment with valid auth and network access. Missing `claude`, invalid Claude auth, or lack of network access is treated as a failure by default.
 

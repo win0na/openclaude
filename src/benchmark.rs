@@ -5,6 +5,7 @@ use crate::provider::{
     MessagePart, MessageRole, ProviderMessage, ProviderModel, ProviderRequest, StreamPart,
 };
 use reqwest::blocking::{Client, Response};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
@@ -47,9 +48,27 @@ struct BenchmarkSidecar {
     logs: Arc<Mutex<Vec<String>>>,
 }
 
+struct ClaudeBenchWorker {
+    child: Child,
+    stdin: std::process::ChildStdin,
+    stdout: BufReader<std::process::ChildStdout>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WorkerRequest {
+    model: String,
+    prompt: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WorkerResponse {
+    first_ms: Option<f64>,
+    total_ms: Option<f64>,
+    error: Option<String>,
+}
+
 pub fn run(cli: &Cli, opts: &BenchmarkOptions) -> anyhow::Result<()> {
     let style = console::stdout_style();
-    let request = request(opts);
     let modes = selected_modes(opts.mode);
 
     println!("{}", style.title("openclaude benchmark"));
@@ -66,9 +85,15 @@ pub fn run(cli: &Cli, opts: &BenchmarkOptions) -> anyhow::Result<()> {
     println!();
     println!("{}", style.heading("progress:"));
 
+    println!(
+        "  {}",
+        style.command("starting raw claude benchmark worker")
+    );
+    let mut claude_worker = start_claude_worker(cli)?;
     println!("  {}", style.command("preflighting raw claude CLI"));
-    if let Err(err) = bench_claude(cli, opts, &request) {
+    if let Err(err) = bench_claude(&mut claude_worker, opts) {
         if opts.skip_live {
+            stop_claude_worker(&mut claude_worker);
             skip_live(err.to_string());
             return Ok(());
         }
@@ -76,18 +101,22 @@ pub fn run(cli: &Cli, opts: &BenchmarkOptions) -> anyhow::Result<()> {
     }
 
     println!("  {}", style.command("collecting claude samples"));
-    warmup(opts.warmups, || bench_claude(cli, opts, &request))?;
+    warmup(opts.warmups, || bench_claude(&mut claude_worker, opts))?;
     let claude_summary = summarize(&run_samples(opts.iterations, || {
-        bench_claude(cli, opts, &request)
+        bench_claude(&mut claude_worker, opts)
     })?);
 
     let mut sidecar = if modes.iter().any(|mode| {
         matches!(
             mode,
-            BenchmarkMode::WarmSession | BenchmarkMode::RequestPath
+            BenchmarkMode::Translation | BenchmarkMode::OpencodeSession
         )
     }) {
-        println!("  {}", style.command("starting benchmark sidecar"));
+        println!(
+            "  {}  {}",
+            style.command("starting benchmark HTTP server"),
+            cli.base_url
+        );
         Some(start_sidecar(cli, opts)?)
     } else {
         None
@@ -98,9 +127,9 @@ pub fn run(cli: &Cli, opts: &BenchmarkOptions) -> anyhow::Result<()> {
     for mode in modes {
         match mode {
             BenchmarkMode::All => unreachable!(),
-            BenchmarkMode::RequestPath => {
+            BenchmarkMode::Translation => {
                 let sidecar_port = sidecar.as_ref().unwrap().port;
-                println!("  {}", style.command("preflighting request path"));
+                println!("  {}", style.command("preflighting translation path"));
                 if let Err(err) = bench_request_path(sidecar_port, opts) {
                     if opts.skip_live {
                         if let Some(sidecar) = sidecar.as_mut() {
@@ -111,17 +140,17 @@ pub fn run(cli: &Cli, opts: &BenchmarkOptions) -> anyhow::Result<()> {
                     }
                     return Err(live_error(err));
                 }
-                println!("  {}", style.command("collecting request path samples"));
+                println!("  {}", style.command("collecting translation samples"));
                 warmup(opts.warmups, || bench_request_path(sidecar_port, opts))?;
                 let summary = summarize(&run_samples(opts.iterations, || {
                     bench_request_path(sidecar_port, opts)
                 })?);
-                results.push(("request-path", summary));
+                results.push(("translation", summary));
             }
-            BenchmarkMode::WarmSession => {
+            BenchmarkMode::OpencodeSession => {
                 let sidecar_port = sidecar.as_ref().unwrap().port;
                 let workspace = BenchmarkWorkspace::new()?;
-                println!("  {}", style.command("preflighting warm fresh session"));
+                println!("  {}", style.command("preflighting opencode session"));
                 if let Err(err) = bench_session(sidecar_port, cli, opts, &workspace) {
                     if opts.skip_live {
                         if let Some(sidecar) = sidecar.as_mut() {
@@ -132,17 +161,14 @@ pub fn run(cli: &Cli, opts: &BenchmarkOptions) -> anyhow::Result<()> {
                     }
                     return Err(live_error(err));
                 }
-                println!(
-                    "  {}",
-                    style.command("collecting warm fresh session samples")
-                );
+                println!("  {}", style.command("collecting opencode session samples"));
                 warmup(opts.warmups, || {
                     bench_session(sidecar_port, cli, opts, &workspace)
                 })?;
                 let summary = summarize(&run_samples(opts.iterations, || {
                     bench_session(sidecar_port, cli, opts, &workspace)
                 })?);
-                results.push(("warm-session", summary));
+                results.push(("opencode-session", summary));
             }
         }
     }
@@ -150,6 +176,7 @@ pub fn run(cli: &Cli, opts: &BenchmarkOptions) -> anyhow::Result<()> {
     if let Some(sidecar) = sidecar.as_mut() {
         stop_sidecar(sidecar);
     }
+    stop_claude_worker(&mut claude_worker);
 
     println!();
     println!("{}", style.heading("results:"));
@@ -165,7 +192,7 @@ pub fn run(cli: &Cli, opts: &BenchmarkOptions) -> anyhow::Result<()> {
 
 fn selected_modes(mode: BenchmarkMode) -> Vec<BenchmarkMode> {
     match mode {
-        BenchmarkMode::All => vec![BenchmarkMode::WarmSession, BenchmarkMode::RequestPath],
+        BenchmarkMode::All => vec![BenchmarkMode::Translation, BenchmarkMode::OpencodeSession],
         other => vec![other],
     }
 }
@@ -175,23 +202,10 @@ fn mode_names(modes: &[BenchmarkMode]) -> Vec<&'static str> {
         .iter()
         .map(|mode| match mode {
             BenchmarkMode::All => "all",
-            BenchmarkMode::WarmSession => "warm-session",
-            BenchmarkMode::RequestPath => "request-path",
+            BenchmarkMode::Translation => "translation",
+            BenchmarkMode::OpencodeSession => "opencode-session",
         })
         .collect()
-}
-
-fn request(opts: &BenchmarkOptions) -> ProviderRequest {
-    ProviderRequest {
-        model: ProviderModel::claude(opts.model.clone(), opts.model.clone()),
-        system_prompt: None,
-        messages: vec![ProviderMessage {
-            role: MessageRole::User,
-            parts: vec![MessagePart::Text {
-                text: opts.prompt.clone(),
-            }],
-        }],
-    }
 }
 
 impl BenchmarkWorkspace {
@@ -319,69 +333,29 @@ where
     Ok(())
 }
 
-fn bench_claude(
-    cli: &Cli,
-    opts: &BenchmarkOptions,
-    request: &ProviderRequest,
-) -> anyhow::Result<Sample> {
-    let runtime = ClaudeCliRuntime::new(&cli.claude_bin, vec![request.model.clone()]);
-    let prompt = build_claude_prompt(request);
-    let mut child = Command::new(&cli.claude_bin)
-        .args(runtime.command_args(request))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+fn bench_claude(worker: &mut ClaudeBenchWorker, opts: &BenchmarkOptions) -> anyhow::Result<Sample> {
+    let request = WorkerRequest {
+        model: opts.model.clone(),
+        prompt: opts.prompt.clone(),
+    };
+    serde_json::to_writer(&mut worker.stdin, &request)?;
+    worker.stdin.write_all(b"\n")?;
+    worker.stdin.flush()?;
 
-    let stderr = child.stderr.take().unwrap();
-    let stderr_handle = thread::spawn(move || {
-        let mut reader = BufReader::new(stderr);
-        let mut text = String::new();
-        let _ = reader.read_to_string(&mut text);
-        text
-    });
-
-    let start = Instant::now();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(prompt.user_prompt.as_bytes())?;
-
-    let stdout = child.stdout.take().unwrap();
-    let mut reader = BufReader::new(stdout);
     let mut line = String::new();
-    let mut first_ms = None;
-    loop {
-        line.clear();
-        if reader.read_line(&mut line)? == 0 {
-            break;
-        }
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let parts = runtime.parse_stream_line(trimmed)?;
-        if first_ms.is_none()
-            && parts
-                .iter()
-                .any(|part| matches!(part, StreamPart::TextDelta(text) if !text.delta.is_empty()))
-        {
-            first_ms = Some(start.elapsed().as_secs_f64() * 1000.0);
-        }
+    worker.stdout.read_line(&mut line)?;
+    let response: WorkerResponse = serde_json::from_str(line.trim())?;
+    if let Some(error) = response.error {
+        anyhow::bail!(error);
     }
-
-    let status = child.wait()?;
-    let stderr = stderr_handle.join().unwrap_or_default();
-    if !status.success() {
-        anyhow::bail!("claude CLI failed with {status}: {stderr}");
-    }
-
-    let total_ms = start.elapsed().as_secs_f64() * 1000.0;
-    let first_ms = first_ms.ok_or_else(|| {
-        anyhow::anyhow!("claude CLI produced no text delta for model {}", opts.model)
-    })?;
-    Ok(Sample { first_ms, total_ms })
+    Ok(Sample {
+        first_ms: response
+            .first_ms
+            .ok_or_else(|| anyhow::anyhow!("claude benchmark worker produced no first_ms"))?,
+        total_ms: response
+            .total_ms
+            .ok_or_else(|| anyhow::anyhow!("claude benchmark worker produced no total_ms"))?,
+    })
 }
 
 fn bench_request_path(port: u16, opts: &BenchmarkOptions) -> anyhow::Result<Sample> {
@@ -468,6 +442,7 @@ fn bench_session_from(
         .arg(&opts.model)
         .arg("--workdir")
         .arg(&workdir)
+        .arg("bootstrap")
         .arg("run")
         .arg("--format")
         .arg("json")
@@ -644,4 +619,154 @@ fn live_error(reason: impl std::fmt::Display) -> anyhow::Error {
         "live benchmark failed; pass --skip-live to opt out when Claude auth or network access is unavailable: {}",
         reason
     )
+}
+
+fn start_claude_worker(cli: &Cli) -> anyhow::Result<ClaudeBenchWorker> {
+    let binary = std::env::current_exe()?;
+    let mut child = Command::new(binary)
+        .arg("--claude-bin")
+        .arg(&cli.claude_bin)
+        .arg("benchmark-claude-worker")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let stderr = child.stderr.take().unwrap();
+    let stderr_logs = Arc::new(Mutex::new(Vec::new()));
+    spawn_logs(stderr, stderr_logs.clone());
+
+    Ok(ClaudeBenchWorker {
+        stdin: child.stdin.take().unwrap(),
+        stdout: BufReader::new(child.stdout.take().unwrap()),
+        child,
+    })
+}
+
+fn stop_claude_worker(worker: &mut ClaudeBenchWorker) {
+    let _ = worker.child.kill();
+    let _ = worker.child.wait();
+}
+
+pub fn run_claude_worker(cli: &Cli) -> anyhow::Result<()> {
+    let runtime = ClaudeCliRuntime::new(&cli.claude_bin, Vec::new());
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    let mut reader = BufReader::new(stdin.lock());
+    let mut writer = stdout.lock();
+    let mut line = String::new();
+
+    loop {
+        line.clear();
+        if reader.read_line(&mut line)? == 0 {
+            break;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let request: WorkerRequest = serde_json::from_str(trimmed)?;
+        let response = match sample_claude_request(&runtime, &cli.claude_bin, &request) {
+            Ok(sample) => WorkerResponse {
+                first_ms: Some(sample.first_ms),
+                total_ms: Some(sample.total_ms),
+                error: None,
+            },
+            Err(err) => WorkerResponse {
+                first_ms: None,
+                total_ms: None,
+                error: Some(err.to_string()),
+            },
+        };
+
+        serde_json::to_writer(&mut writer, &response)?;
+        writer.write_all(b"\n")?;
+        writer.flush()?;
+    }
+
+    Ok(())
+}
+
+fn sample_claude_request(
+    runtime: &ClaudeCliRuntime,
+    claude_bin: &PathBuf,
+    req: &WorkerRequest,
+) -> anyhow::Result<Sample> {
+    let request = ProviderRequest {
+        model: ProviderModel::claude(req.model.clone(), req.model.clone()),
+        system_prompt: None,
+        messages: vec![ProviderMessage {
+            role: MessageRole::User,
+            parts: vec![MessagePart::Text {
+                text: req.prompt.clone(),
+            }],
+        }],
+    };
+    let prompt = build_claude_prompt(&request);
+    let mut child = Command::new(claude_bin)
+        .args(runtime.command_args(&request))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let stderr = child.stderr.take().unwrap();
+    let stderr_handle = thread::spawn(move || {
+        let mut reader = BufReader::new(stderr);
+        let mut text = String::new();
+        let _ = reader.read_to_string(&mut text);
+        text
+    });
+
+    let start = Instant::now();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(prompt.user_prompt.as_bytes())?;
+
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    let mut first_ms = None;
+    let mut finish_ms = None;
+    loop {
+        line.clear();
+        if reader.read_line(&mut line)? == 0 {
+            break;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let parts = runtime.parse_stream_line(trimmed)?;
+        if first_ms.is_none()
+            && parts
+                .iter()
+                .any(|part| matches!(part, StreamPart::TextDelta(text) if !text.delta.is_empty()))
+        {
+            first_ms = Some(start.elapsed().as_secs_f64() * 1000.0);
+        }
+        if finish_ms.is_none()
+            && parts
+                .iter()
+                .any(|part| matches!(part, StreamPart::Finish { .. }))
+        {
+            finish_ms = Some(start.elapsed().as_secs_f64() * 1000.0);
+        }
+    }
+
+    let status = child.wait()?;
+    let stderr = stderr_handle.join().unwrap_or_default();
+    if !status.success() {
+        anyhow::bail!("claude CLI failed with {status}: {stderr}");
+    }
+
+    Ok(Sample {
+        first_ms: first_ms.ok_or_else(|| {
+            anyhow::anyhow!("claude CLI produced no text delta for model {}", req.model)
+        })?,
+        total_ms: finish_ms.unwrap_or_else(|| start.elapsed().as_secs_f64() * 1000.0),
+    })
 }

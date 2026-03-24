@@ -24,7 +24,7 @@ pub struct Cli {
     #[arg(long, default_value = "opencode")]
     pub opencode_bin: PathBuf,
 
-    #[arg(long, default_value = "http://127.0.0.1:3000/v1")]
+    #[arg(long, default_value = "http://127.0.0.1:43123/v1")]
     pub base_url: String,
 
     #[arg(long, default_value = "/tmp/openclaude")]
@@ -35,6 +35,12 @@ pub struct Cli {
 pub enum Command {
     Help,
     Benchmark(Benchmark),
+    #[command(hide = true)]
+    BenchmarkClaudeWorker,
+    Bootstrap {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<OsString>,
+    },
     Reference {
         #[arg(long, default_value = ".")]
         project_root: PathBuf,
@@ -42,7 +48,7 @@ pub enum Command {
     Serve {
         #[arg(long, default_value = "127.0.0.1")]
         host: String,
-        #[arg(long, default_value = "3000")]
+        #[arg(long, default_value = "43123")]
         port: u16,
     },
     Stdio,
@@ -66,7 +72,7 @@ pub enum BenchmarkCommand {
 
 #[derive(Debug, Clone, Args)]
 pub struct BenchmarkOptions {
-    #[arg(long, value_enum, default_value_t = BenchmarkMode::WarmSession)]
+    #[arg(long, value_enum, default_value_t = BenchmarkMode::Translation)]
     pub mode: BenchmarkMode,
 
     #[arg(long, default_value = "sonnet")]
@@ -94,8 +100,8 @@ pub struct BenchmarkOptions {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum BenchmarkMode {
     All,
-    WarmSession,
-    RequestPath,
+    Translation,
+    OpencodeSession,
 }
 
 fn command_line(style: console::Style, name: &str, description: &str) -> String {
@@ -143,7 +149,11 @@ fn render_detailed_help(style: console::Style) -> String {
     ];
     lines.extend(help_block(
         style.command("openclaude"),
-        "default: launch opencode with openclaude provider bootstrap",
+        "default: start the server and launch opencode",
+    ));
+    lines.extend(help_block(
+        style.command("openclaude bootstrap"),
+        "launch opencode with provider bootstrap only",
     ));
     lines.extend(help_block(
         style.command("openclaude serve"),
@@ -176,7 +186,7 @@ fn render_detailed_help(style: console::Style) -> String {
         option_line(
             style,
             "--base-url <BASE_URL>",
-            "[default: http://127.0.0.1:3000/v1]",
+            "[default: http://127.0.0.1:43123/v1]",
         ),
         option_line(style, "--workdir <WORKDIR>", "[default: /tmp/openclaude]"),
         option_line(style, "-h, --help", "print help"),
@@ -184,6 +194,11 @@ fn render_detailed_help(style: console::Style) -> String {
         style.heading("commands:"),
         command_line(style, "help", "print the detailed help page"),
         command_line(style, "benchmark", "run the live latency benchmark"),
+        command_line(
+            style,
+            "bootstrap",
+            "launch opencode without starting the server",
+        ),
         command_line(
             style,
             "reference",
@@ -194,6 +209,10 @@ fn render_detailed_help(style: console::Style) -> String {
         String::new(),
         style.heading("subcommand usage:"),
     ]);
+    lines.extend(help_block(
+        style.command("openclaude bootstrap [COMMAND]"),
+        "launch opencode with provider bootstrap only",
+    ));
     lines.extend(help_block(
         style.command("openclaude reference [--project-root <PROJECT_ROOT>]"),
         "refresh the optional local opencode checkout",
@@ -223,7 +242,7 @@ fn render_benchmark_help(style: console::Style) -> String {
         detail_line(
             style,
             "--mode <MODE>",
-            "benchmark mode [possible values: all, warm-session, request-path]",
+            "benchmark mode [possible values: all, translation, opencode-session]",
         ),
         detail_line(style, "--model <MODEL>", "benchmark model id"),
         detail_line(style, "--prompt <PROMPT>", "benchmark prompt"),
@@ -263,18 +282,20 @@ mod tests {
         assert!(help.contains("usage:"));
         assert!(help.contains("example:"));
         assert!(help.contains("openclaude"));
+        assert!(help.contains("openclaude bootstrap"));
         assert!(help.contains("benchmark"));
-        assert!(help.contains("default: launch opencode with openclaude provider bootstrap"));
+        assert!(help.contains("default: start the server and launch opencode"));
+        assert!(help.contains("launch opencode with provider bootstrap only"));
         assert!(help.contains("run the live latency benchmark"));
         assert!(help.contains("openclaude serve"));
         assert!(help.contains("start the HTTP backend server"));
         assert!(help.contains("subcommand usage:"));
+        assert!(help.contains("openclaude bootstrap [COMMAND]"));
         assert!(help.contains("openclaude reference [--project-root <PROJECT_ROOT>]"));
         assert!(help.contains("openclaude serve [--host <HOST>] [--port <PORT>]"));
         assert!(!help.contains("benchmark:"));
         assert!(!help.contains("openclaude benchmark [SUBCOMMAND]"));
-        assert!(help.contains("launch opencode with openclaude provider bootstrap"));
-        assert!(!help.contains("  bootstrap"));
+        assert!(help.contains("launch opencode without starting the server"));
         assert!(help.contains("stdio"));
         assert!(help.contains("start the STDIO bridge explicitly"));
         assert!(!help.contains("quick guide"));
@@ -288,7 +309,7 @@ mod tests {
         assert!(help.contains("openclaude benchmark [OPTIONS]"));
         assert!(help.contains("print benchmark help"));
         assert!(help.contains("--mode <MODE>"));
-        assert!(help.contains("possible values: all, warm-session, request-path"));
+        assert!(help.contains("possible values: all, translation, opencode-session"));
         assert!(help.contains("--model <MODEL>"));
         assert!(help.contains("benchmark model id"));
         assert!(help.contains("--prompt <PROMPT>"));
@@ -315,6 +336,19 @@ mod tests {
     }
 
     #[test]
+    fn parses_bootstrap() {
+        let cli = Cli::try_parse_from(["openclaude", "bootstrap", "run", "hello"])
+            .expect("parse bootstrap");
+
+        match cli.command {
+            Some(Command::Bootstrap { args }) => {
+                assert_eq!(args, vec![OsString::from("run"), OsString::from("hello")]);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
     fn parses_benchmark() {
         let cli = Cli::try_parse_from(["openclaude", "benchmark", "--iterations", "3"])
             .expect("parse benchmark");
@@ -322,7 +356,7 @@ mod tests {
         match cli.command {
             Some(Command::Benchmark(cmd)) => {
                 assert!(cmd.command.is_none());
-                assert!(matches!(cmd.options.mode, BenchmarkMode::WarmSession));
+                assert!(matches!(cmd.options.mode, BenchmarkMode::Translation));
                 assert_eq!(cmd.options.iterations, 3);
                 assert_eq!(cmd.options.model, "sonnet");
             }

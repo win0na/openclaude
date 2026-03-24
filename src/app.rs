@@ -1,5 +1,5 @@
 use crate::claude::{ClaudeCli, ClaudeCliRuntime};
-use crate::bootstrap::launch_opencode;
+use crate::bootstrap::{launch_opencode, launch_opencode_with_server};
 use crate::benchmark;
 use crate::cli::{BenchmarkCommand, Cli, Command};
 use crate::console;
@@ -21,8 +21,8 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         .init();
 
     match &cli.command {
-        None => launch_opencode(&cli, &[]),
-        Some(Command::External(args)) => launch_opencode(&cli, args),
+        None => launch_opencode_with_server(&cli, &[]),
+        Some(Command::External(args)) => launch_opencode_with_server(&cli, args),
         Some(Command::Help) => {
             let mut stdout = io::stdout().lock();
             let help = crate::cli::detailed_help();
@@ -41,6 +41,8 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
                 benchmark::run(&cli, &cmd.options)
             }
         }
+        Some(Command::BenchmarkClaudeWorker) => benchmark::run_claude_worker(&cli),
+        Some(Command::Bootstrap { args }) => launch_opencode(&cli, args),
         Some(Command::Reference { project_root }) => {
             let result = refresh_reference(project_root)?;
             info!(
