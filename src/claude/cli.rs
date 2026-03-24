@@ -19,6 +19,21 @@ pub struct ClaudeCli {
     pub binary: PathBuf,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModelDiscoverySource {
+    Override,
+    Cache,
+    Probe,
+    Fallback,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelDiscovery {
+    pub models: Vec<ProviderModel>,
+    pub source: ModelDiscoverySource,
+    pub warning: Option<String>,
+}
+
 impl ClaudeCli {
     pub fn new(binary: impl Into<PathBuf>) -> Self {
         Self {
@@ -49,6 +64,10 @@ impl ClaudeCli {
     }
 
     pub fn discover_available_models(&self, overrides: &[String]) -> Vec<ProviderModel> {
+        self.discover_available_models_report(overrides).models
+    }
+
+    pub fn discover_available_models_report(&self, overrides: &[String]) -> ModelDiscovery {
         self.discover_available_models_with_cache_path(overrides, default_cache_path())
     }
 
@@ -56,32 +75,55 @@ impl ClaudeCli {
         &self,
         overrides: &[String],
         cache_path: Option<PathBuf>,
-    ) -> Vec<ProviderModel> {
+    ) -> ModelDiscovery {
         let overrides = override_models(overrides);
         if !overrides.is_empty() {
-            return overrides;
+            return ModelDiscovery {
+                models: overrides,
+                source: ModelDiscoverySource::Override,
+                warning: None,
+            };
         }
 
         if let Some(models) = cache_path
             .as_ref()
             .and_then(|path| self.read_cached_models(path))
         {
-            return models;
+            return ModelDiscovery {
+                models,
+                source: ModelDiscoverySource::Cache,
+                warning: None,
+            };
         }
 
+        let mut failures = Vec::new();
         let discovered = default_models()
             .into_iter()
-            .filter_map(|model| self.probe_model(model))
+            .filter_map(|model| match self.probe_model(model) {
+                Ok(model) => model,
+                Err(err) => {
+                    failures.push(err);
+                    None
+                }
+            })
             .collect::<Vec<_>>();
 
         if !discovered.is_empty() {
             if let Some(path) = cache_path.as_ref() {
                 self.write_cached_models(path, &discovered);
             }
-            return discovered;
+            return ModelDiscovery {
+                models: discovered,
+                source: ModelDiscoverySource::Probe,
+                warning: None,
+            };
         }
 
-        default_models()
+        ModelDiscovery {
+            models: default_models(),
+            source: ModelDiscoverySource::Fallback,
+            warning: Some(self.discovery_warning(&failures)),
+        }
     }
 
     pub fn binary(&self) -> &Path {
@@ -99,15 +141,21 @@ impl ClaudeCli {
         ]
     }
 
-    fn probe_model(&self, model: ProviderModel) -> Option<ProviderModel> {
+    fn probe_model(&self, model: ProviderModel) -> Result<Option<ProviderModel>, String> {
         let output = Command::new(self.binary())
             .args(self.discovery_args(&model.id))
             .output()
-            .ok()?;
+            .map_err(|err| format!("{}: {err}", model.id))?;
 
-        let value: Value = serde_json::from_slice(&output.stdout).ok()?;
+        let value: Value = serde_json::from_slice(&output.stdout)
+            .map_err(|err| format!("{}: failed to parse discovery output: {err}", model.id))?;
         if value.get("is_error").and_then(Value::as_bool) != Some(false) {
-            return None;
+            let detail = value
+                .get("result")
+                .and_then(Value::as_str)
+                .or_else(|| value.get("error").and_then(Value::as_str))
+                .unwrap_or("Claude CLI rejected the request");
+            return Err(format!("{}: {detail}", model.id));
         }
 
         let display_name = value
@@ -117,7 +165,21 @@ impl ClaudeCli {
             .map(|name| humanize_model_name(name))
             .unwrap_or(model.display_name);
 
-        Some(ProviderModel::claude(model.id, display_name))
+        Ok(Some(ProviderModel::claude(model.id, display_name)))
+    }
+
+    fn discovery_warning(&self, failures: &[String]) -> String {
+        let mut message = format!(
+            "failed to discover live Claude models via `{}`; using fallback model catalog instead",
+            self.binary.display()
+        );
+        if let Some(first) = failures.first() {
+            message.push_str(&format!(" (first failure: {first})"));
+        }
+        message.push_str(
+            ". This usually means the Claude CLI is missing, unauthenticated, or offline.",
+        );
+        message
     }
 
     fn read_cached_models(&self, path: &Path) -> Option<Vec<ProviderModel>> {
@@ -245,7 +307,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn stream_args_include_prompt_when_present() {
+    fn stream_prompt() {
         let cli = ClaudeCli::new("claude");
         let args = cli.stream_args("sonnet", Some("system"));
         assert!(args.contains(&"--permission-mode".to_string()));
@@ -256,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn humanizes_versioned_model_name() {
+    fn humanizes_version() {
         assert_eq!(
             humanize_model_name("claude-sonnet-4-6"),
             "Claude Sonnet 4.6"
@@ -268,17 +330,19 @@ mod tests {
     }
 
     #[test]
-    fn override_models_win_over_probe_and_cache() {
+    fn override_wins() {
         let cli = ClaudeCli::new("claude");
         let models = cli.discover_available_models_with_cache_path(
             &["sonnet,claude-sonnet-4-6".into(), "opus".into()],
             None,
         );
         let ids = models
+            .models
             .iter()
             .map(|model| model.id.as_str())
             .collect::<Vec<_>>();
         let names = models
+            .models
             .iter()
             .map(|model| model.display_name.as_str())
             .collect::<Vec<_>>();
@@ -291,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn discover_available_models_uses_fresh_cache() {
+    fn uses_cache() {
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("models.json");
         fs::write(
@@ -307,14 +371,15 @@ mod tests {
         let cli = ClaudeCli::new(dir.path().join("missing-claude"));
         let models = cli.discover_available_models_with_cache_path(&[], Some(cache_path));
 
+        assert_eq!(models.source, ModelDiscoverySource::Cache);
         assert_eq!(
-            models,
+            models.models,
             vec![ProviderModel::claude("sonnet", "Claude Sonnet 4.6")]
         );
     }
 
     #[test]
-    fn discover_available_models_prefers_cache_over_live_probe() {
+    fn prefers_cache() {
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("models.json");
         fs::write(
@@ -344,14 +409,15 @@ mod tests {
         let cli = ClaudeCli::new(&script);
         let models = cli.discover_available_models_with_cache_path(&[], Some(cache_path));
 
+        assert_eq!(models.source, ModelDiscoverySource::Cache);
         assert_eq!(
-            models,
+            models.models,
             vec![ProviderModel::claude("sonnet", "Cached Sonnet")]
         );
     }
 
     #[test]
-    fn discover_available_models_probes_when_cache_is_missing() {
+    fn probes_live() {
         let dir = tempdir().unwrap();
         let script = dir.path().join("fake-claude.sh");
         fs::write(
@@ -370,26 +436,33 @@ mod tests {
         let cli = ClaudeCli::new(&script);
         let models = cli.discover_available_models_with_cache_path(&[], None);
 
+        assert_eq!(models.source, ModelDiscoverySource::Probe);
         assert_eq!(
-            models,
+            models.models,
             vec![ProviderModel::claude("sonnet", "Claude Sonnet 4.6")]
         );
     }
 
     #[test]
-    fn discover_available_models_falls_back_when_cache_is_missing_and_probe_fails() {
+    fn falls_back() {
         let dir = tempdir().unwrap();
         let cli = ClaudeCli::new(dir.path().join("missing-claude"));
         let models = cli.discover_available_models_with_cache_path(&[], None);
 
+        assert_eq!(models.source, ModelDiscoverySource::Fallback);
+        assert!(models.warning.is_some());
         assert_eq!(
-            models.into_iter().map(|model| model.id).collect::<Vec<_>>(),
+            models
+                .models
+                .into_iter()
+                .map(|model| model.id)
+                .collect::<Vec<_>>(),
             vec!["haiku", "sonnet", "opus"]
         );
     }
 
     #[test]
-    fn discover_available_models_filters_to_successful_aliases() {
+    fn filters_aliases() {
         let dir = tempdir().unwrap();
         let script = dir.path().join("fake-claude.sh");
         fs::write(
@@ -418,10 +491,12 @@ fi
         let cli = ClaudeCli::new(&script);
         let models = cli.discover_available_models_with_cache_path(&[], None);
         let ids = models
+            .models
             .iter()
             .map(|model| model.id.as_str())
             .collect::<Vec<_>>();
         let names = models
+            .models
             .iter()
             .map(|model| model.display_name.as_str())
             .collect::<Vec<_>>();
