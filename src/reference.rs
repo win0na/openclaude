@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -125,13 +125,13 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn reference_path_targets_project_root() {
+    fn path_root() {
         let path = reference_path(Path::new("/tmp/openclaude"));
         assert_eq!(path, PathBuf::from("/tmp/openclaude/opencode-reference"));
     }
 
     #[test]
-    fn refresh_reference_from_clones_local_repo() {
+    fn refresh_clones() {
         let repo_root = tempdir().unwrap();
         let source = repo_root.path().join("source");
         let project = repo_root.path().join("project");
