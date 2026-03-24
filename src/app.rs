@@ -1,6 +1,7 @@
 use crate::claude::{ClaudeCli, ClaudeCliRuntime};
 use crate::bootstrap::launch_opencode;
-use crate::cli::{Cli, Command};
+use crate::benchmark;
+use crate::cli::{BenchmarkCommand, Cli, Command};
 use crate::console;
 use crate::config::RuntimeConfig;
 use crate::integration::OpenCodeBridge;
@@ -8,7 +9,7 @@ use crate::reference::refresh_reference;
 use crate::server::{OpenClaudeService, create_router, serve_stdio};
 use std::io::{self, Write};
 use std::net::SocketAddr;
-use tracing::info;
+use tracing::{info, warn};
 
 pub fn run(cli: Cli) -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -29,6 +30,17 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             stdout.write_all(b"\n")?;
             Ok(())
         }
+        Some(Command::Benchmark(cmd)) => {
+            if matches!(cmd.command, Some(BenchmarkCommand::Help)) {
+                let mut stdout = io::stdout().lock();
+                let help = crate::cli::benchmark_help();
+                stdout.write_all(help.as_bytes())?;
+                stdout.write_all(b"\n")?;
+                Ok(())
+            } else {
+                benchmark::run(&cli, &cmd.options)
+            }
+        }
         Some(Command::Reference { project_root }) => {
             let result = refresh_reference(project_root)?;
             info!(
@@ -42,15 +54,17 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         }
         Some(Command::Serve { host, port }) => {
             let config = RuntimeConfig::from_cli(&cli);
-            let models = ClaudeCli::new(&config.claude_bin)
-                .discover_available_models(&config.available_models);
+            let discovery = ClaudeCli::new(&config.claude_bin)
+                .discover_available_models_report(&config.available_models);
+            if let Some(message) = discovery.warning.as_deref() {
+                warn!(claude_bin = %config.claude_bin.display(), "{message}");
+            }
+            let models = discovery.models;
             let runtime_models = models.len();
             let runtime = ClaudeCliRuntime::new(config.claude_bin.clone(), models.clone());
             let bridge = OpenCodeBridge::new(runtime, models);
 
             info!(
-                model = %config.default_model,
-                provider_id = %config.provider_id,
                 runtime_models,
                 integration_mode = "http_server",
                 "openclaude initialized"
@@ -77,16 +91,18 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
         }
         Some(Command::Stdio) => {
             let config = RuntimeConfig::from_cli(&cli);
-            let models = ClaudeCli::new(&config.claude_bin)
-                .discover_available_models(&config.available_models);
+            let discovery = ClaudeCli::new(&config.claude_bin)
+                .discover_available_models_report(&config.available_models);
+            if let Some(message) = discovery.warning.as_deref() {
+                warn!(claude_bin = %config.claude_bin.display(), "{message}");
+            }
+            let models = discovery.models;
             let runtime_models = models.len();
             let runtime = ClaudeCliRuntime::new(config.claude_bin.clone(), models.clone());
             let bridge = OpenCodeBridge::new(runtime, models);
             let mut service = OpenClaudeService::new(bridge);
 
             info!(
-                model = %config.default_model,
-                provider_id = %config.provider_id,
                 runtime_models,
                 integration_mode = "standalone_bridge",
                 "openclaude initialized"
