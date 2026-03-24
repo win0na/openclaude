@@ -121,7 +121,7 @@ mod tests {
     }
 
     #[test]
-    fn session_enters_waiting_state_on_tool_call() {
+    fn session_waits() {
         let runtime = MockRuntime::new(vec![vec![
             StreamPart::Start,
             StreamPart::ToolCall(ToolCallPart {

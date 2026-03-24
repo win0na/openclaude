@@ -19,7 +19,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_catalog_contains_expected_models() {
+    fn catalog_models() {
         let ids = default_models()
             .into_iter()
             .map(|model| model.id)
@@ -29,7 +29,7 @@ mod tests {
     }
 
     #[test]
-    fn default_model_lookup_finds_known_model() {
+    fn lookup_known() {
         let model = default_model("sonnet").unwrap();
         assert_eq!(model.display_name, "Claude Sonnet");
     }

@@ -132,7 +132,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn maps_waiting_step_to_adapter_shape() {
+    fn maps_waiting() {
         let step = SessionStep {
             parts: vec![
                 StreamPart::Start,

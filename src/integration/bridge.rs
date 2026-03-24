@@ -186,7 +186,7 @@ mod tests {
     }
 
     #[test]
-    fn bridge_maps_wire_request_to_adapter_step() {
+    fn bridge_maps() {
         let model = ProviderModel::claude("sonnet", "Claude Sonnet");
         let runtime = EmptyRuntime {
             models: vec![model.clone()],
