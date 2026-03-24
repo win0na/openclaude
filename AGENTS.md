@@ -8,7 +8,9 @@ This project assumes tracked internal reference docs under `docs/`. Prefer those
 
 ## Git Conventions
 
-When committing is explicitly requested, use format: `topic: short description`. For large changes, use a multi-line message where the first line is the short label and the body describes changes in detail, utilizing a bulleted list.
+When committing is explicitly requested, use format: `topic: short description`. For large changes, use a multi-line message where the first line is the short label and the body describes changes in detail with a bulleted list.
+
+This commit-message convention applies to all git workflows in this project, including automated helpers and git-specific skills such as `git-master`.
 
 Do not create commits for agent-made changes unless the user explicitly asks for a commit. When a commit is requested, keep it atomic and follow the project commit format.
 
@@ -36,22 +38,22 @@ If the change affects OpenCode integration knowledge, update `docs/OPENCODE_REFE
 
 ## What This Is
 
-`openclaude` is a translation layer between OpenCode and Claude Code. It uses a plugin-based frontend and a native translation backend so OpenCode can preserve its own tooling, orchestration, and rendering semantics while Claude Code remains the model-facing transport.
+`openclaude` is a translation layer between OpenCode and Claude Code. It uses a bootstrap wrapper and a native translation backend so OpenCode can preserve its own tooling, orchestration, and rendering semantics while Claude Code remains the model-facing transport.
 
 The purpose of this project is to fit more cleanly within Anthropic's guidelines for model usage outside of Claude Code. This project is not an OpenAI-compatible shim; it is a provider-focused translation backend that should model OpenCode's native stream parts and session expectations as closely as possible.
 
-Current plugin research indicates that provider routing should live in OpenCode configuration, while the plugin should remain a thin frontend for auth, headers, params, and transforms. Do not assume a plugin can register a brand-new provider runtime by itself.
+Current integration guidance indicates that provider routing should live in OpenCode configuration plus wrapper-managed bootstrap. Do not assume a custom plugin layer is required for `openclaude` integration.
 
 ## Project Goals
 
 - Use Claude Code CLI as the model transport
 - Serve as a translation layer between OpenCode and Claude Code
-- Support a plugin-based frontend with a native translation backend
-- Keep the plugin frontend thin; keep the backend stateless and translation-focused
+- Support a bootstrap wrapper with a native translation backend
+- Keep the backend stateless and translation-focused while the wrapper only injects provider bootstrap config
 - Preserve OpenCode control over tool execution and subagent orchestration
 - Preserve reasoning/thinking rendering in OpenCode's UI
 - Support resumable tool loops and background task semantics
-- Keep the codebase library-first so it can later be embedded, tested, or wrapped by a separate binary/plugin layer
+- Keep the codebase library-first so it can later be embedded, tested, or wrapped by a separate binary/bootstrap layer
 
 ## Building & Running
 
@@ -90,11 +92,6 @@ openclaude/
 │   ├── CLAUDE_CODE_REFERENCE.md
 │   └── OPENCODE_REFERENCE.md
 ├── opencode-reference/       # optional ignored OpenCode checkout created by `openclaude reference`
-├── plugin/
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── src/
-│       └── index.ts          # thin OpenCode plugin frontend
 ├── README.md
 ├── src/
 │   ├── lib.rs                 # library entrypoint and public exports
@@ -126,7 +123,6 @@ openclaude/
 
 - Favor small modules with explicit types and narrow responsibilities
 - Avoid speculative compatibility layers; tie behavior to evidence from `docs/CLAUDE_CODE_REFERENCE.md`, `docs/OPENCODE_REFERENCE.md`, and mirrored integration notes in this repository
-- Keep TypeScript plugin code limited to frontend hook wiring, auth/header/param transforms, and backend forwarding
 - Use doc comments only where the public API or non-obvious invariants need them
 - Keep tests focused on protocol mapping and stream behavior rather than incidental implementation details
 
@@ -134,6 +130,10 @@ openclaude/
 
 - In human-readable prose across project files, use normal English capitalization and punctuation by default
 - For terminal-facing strings such as console logs, help text, and similar CLI output, prefer the lowercase style previously used in this project
+- For CLI/help/benchmark output, reuse the shared console styling helpers in `src/console.rs` instead of ad hoc formatting
+- Keep terminal output sectioned and consistent: title first, then headings, then aligned detail rows when listing commands/options/config/results
+- Use the shared column formatter for aligned rows; if a section needs deeper indentation, preserve the same description column rather than hand-spacing text
+- When adding new command-specific help sections, match the existing help-page layout conventions instead of inventing a new visual pattern
 - Keep acronyms capitalized in both prose and terminal-facing strings
 - Preserve exact casing for language names, file formats, environment variables, code identifiers, and other literals that require it
 - Always write the project name as `openclaude`, not `OpenClaude`
