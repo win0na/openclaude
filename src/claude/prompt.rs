@@ -100,7 +100,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn builds_system_and_conversation_sections() {
+    fn builds_sections() {
         let prompt = build_claude_prompt(&ProviderRequest {
             model: ProviderModel::claude("sonnet", "Claude Sonnet"),
             system_prompt: Some("provider rules".into()),

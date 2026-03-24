@@ -27,7 +27,7 @@ mod tests {
     use super::normalize_tool_name;
 
     #[test]
-    fn normalizes_known_claude_native_tool_names() {
+    fn normalizes_known() {
         let cases = [
             ("Bash", "bash"),
             ("Read", "read"),
@@ -56,7 +56,7 @@ mod tests {
     }
 
     #[test]
-    fn leaves_unknown_tool_names_unchanged() {
+    fn leaves_unknown() {
         assert_eq!(normalize_tool_name("google_search"), "google_search");
         assert_eq!(normalize_tool_name("custom_tool"), "custom_tool");
     }

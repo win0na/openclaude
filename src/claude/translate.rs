@@ -250,7 +250,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn stream_thinking_delta_maps_to_reasoning_delta() {
+    fn thinking_maps() {
         let chunk = ClaudeChunk {
             kind: "stream_event".into(),
             event: Some(ClaudeStreamEvent {
@@ -276,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn assistant_tool_use_maps_to_tool_input_and_tool_call() {
+    fn tooluse_maps() {
         let chunk = ClaudeChunk {
             kind: "assistant".into(),
             event: None,
@@ -315,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn streamed_tool_input_json_accumulates_until_stop() {
+    fn input_accumulates() {
         let mut translator = ClaudeTranslator::new();
 
         let start = ClaudeChunk {
@@ -398,7 +398,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_assistant_summary_after_stream_events() {
+    fn ignores_summary() {
         let mut translator = ClaudeTranslator::new();
 
         let streamed = ClaudeChunk {
@@ -431,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_user_tool_result_chunks() {
+    fn ignores_toolresult() {
         let chunk = ClaudeChunk {
             kind: "user".into(),
             event: None,
@@ -449,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_claude_native_websearch_tool_name() {
+    fn normalizes_websearch() {
         let chunk = ClaudeChunk {
             kind: "assistant".into(),
             event: None,
@@ -475,7 +475,7 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_claude_native_toolsearch_tool_name() {
+    fn normalizes_toolsearch() {
         let chunk = ClaudeChunk {
             kind: "assistant".into(),
             event: None,
@@ -501,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_claude_native_multiedit_tool_name() {
+    fn normalizes_multiedit() {
         let mut translator = ClaudeTranslator::new();
         let chunk = ClaudeChunk {
             kind: "stream_event".into(),

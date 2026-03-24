@@ -77,7 +77,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_thinking_delta() {
+    fn parses_thinking() {
         let value = r#"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"abc"}}}"#;
         let parsed: ClaudeChunk = serde_json::from_str(value).unwrap();
         let event = parsed.event.unwrap();
@@ -86,7 +86,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_message_delta_as_raw_json() {
+    fn parses_message() {
         let value = r#"{"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null}}}"#;
         let parsed: ClaudeChunk = serde_json::from_str(value).unwrap();
         let event = parsed.event.unwrap();
@@ -101,7 +101,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_user_tool_result_chunk() {
+    fn parses_toolresult() {
         let value = r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_1","type":"tool_result","content":"ok","is_error":false}]}}"#;
         let parsed: ClaudeChunk = serde_json::from_str(value).unwrap();
         let message = parsed.message.unwrap();

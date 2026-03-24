@@ -167,7 +167,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn command_args_follow_request_model() {
+    fn args_model() {
         let runtime = ClaudeCliRuntime::new(
             "claude",
             vec![ProviderModel::claude("sonnet", "Claude Sonnet")],
@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn stream_runs_subprocess_and_translates_output() {
+    fn stream_translates() {
         let dir = tempdir().unwrap();
         let script = dir.path().join("fake-claude.sh");
         fs::write(
