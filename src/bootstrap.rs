@@ -1,15 +1,16 @@
 use crate::claude::ClaudeCli;
 use crate::cli::Cli;
+use crate::provider::catalog::default_model;
 use crate::provider::ProviderModel;
 use anyhow::{bail, Context};
 use serde_json::{json, Map, Value};
 use std::env;
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use tracing::warn;
 
 pub fn launch_opencode(cli: &Cli, args: &[OsString]) -> anyhow::Result<()> {
-    let models = ClaudeCli::new(&cli.claude_bin).discover_available_models(&cli.available_models);
+    let models = requested_models(cli, args);
     let bootstrap_config = merged_bootstrap_config(cli, &models)?;
     let status = Command::new(&cli.opencode_bin)
         .args(args)
@@ -31,6 +32,48 @@ pub fn launch_opencode(cli: &Cli, args: &[OsString]) -> anyhow::Result<()> {
     }
 }
 
+fn requested_models(cli: &Cli, args: &[OsString]) -> Vec<ProviderModel> {
+    if !cli.available_models.is_empty() {
+        return ClaudeCli::new(&cli.claude_bin).discover_available_models(&cli.available_models);
+    }
+
+    if let Some(model) = requested_model_from_args(args, &cli.provider_id) {
+        return vec![model];
+    }
+
+    let discovery =
+        ClaudeCli::new(&cli.claude_bin).discover_available_models_report(&cli.available_models);
+    if let Some(message) = discovery.warning.as_deref() {
+        warn!(claude_bin = %cli.claude_bin.display(), "{message}");
+    }
+    discovery.models
+}
+
+fn requested_model_from_args(args: &[OsString], provider_id: &str) -> Option<ProviderModel> {
+    let mut iter = args.iter().map(|value| value.to_string_lossy());
+    while let Some(arg) = iter.next() {
+        let value = if arg == "-m" || arg == "--model" {
+            iter.next().map(|value| value.into_owned())
+        } else {
+            arg.strip_prefix("--model=").map(str::to_string)
+        };
+
+        let Some(value) = value else {
+            continue;
+        };
+        let prefix = format!("{provider_id}/");
+        let Some(model_id) = value.strip_prefix(&prefix) else {
+            continue;
+        };
+        return Some(
+            default_model(model_id).unwrap_or_else(|| {
+                ProviderModel::claude(model_id.to_string(), model_id.to_string())
+            }),
+        );
+    }
+    None
+}
+
 fn merged_bootstrap_config(cli: &Cli, models: &[ProviderModel]) -> anyhow::Result<Value> {
     let mut config = existing_inline_config()?;
     merge_missing(&mut config, bootstrap_patch(cli, models)?);
@@ -48,7 +91,6 @@ fn existing_inline_config() -> anyhow::Result<Value> {
 }
 
 fn bootstrap_patch(cli: &Cli, models: &[ProviderModel]) -> anyhow::Result<Value> {
-    let plugin = plugin_entry()?;
     let mut model_map = Map::new();
     for model in models {
         model_map.insert(
@@ -74,24 +116,8 @@ fn bootstrap_patch(cli: &Cli, models: &[ProviderModel]) -> anyhow::Result<Value>
     );
 
     Ok(json!({
-        "plugin": [plugin],
         "provider": provider_map,
     }))
-}
-
-fn plugin_entry() -> anyhow::Result<String> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let dist = root.join("plugin/dist/index.js");
-    let src = root.join("plugin/src/index.ts");
-    let plugin = if dist.exists() { dist } else { src };
-    if !plugin.exists() {
-        bail!("openclaude plugin entry not found at {}", plugin.display());
-    }
-    Ok(file_url(&plugin))
-}
-
-fn file_url(path: &Path) -> String {
-    format!("file://{}", path.display())
 }
 
 fn merge_missing(target: &mut Value, patch: Value) {
@@ -122,6 +148,7 @@ mod tests {
     use super::*;
     use crate::cli::Cli;
     use crate::provider::ProviderModel;
+    use std::ffi::OsString;
 
     fn test_cli() -> Cli {
         Cli {
@@ -137,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn bootstrap_patch_contains_plugin_and_provider() {
+    fn patch_provider() {
         let value = bootstrap_patch(
             &test_cli(),
             &[ProviderModel::claude("sonnet", "Claude Sonnet 4.6")],
@@ -147,15 +174,12 @@ mod tests {
             value["provider"]["openclaude"]["options"]["baseURL"],
             "http://127.0.0.1:3000/v1"
         );
-        assert!(value["plugin"].as_array().unwrap()[0]
-            .as_str()
-            .unwrap()
-            .starts_with("file://"));
+        assert!(value.get("plugin").is_none());
         assert!(value["provider"]["openclaude"]["models"]["sonnet"].is_object());
     }
 
     #[test]
-    fn merge_missing_preserves_existing_scalars_and_appends_arrays() {
+    fn merge_arrays() {
         let mut target = json!({
             "plugin": ["file:///existing.ts"],
             "provider": {
@@ -178,7 +202,21 @@ mod tests {
             target["provider"]["openclaude"]["options"]["baseURL"],
             "http://custom"
         );
-        assert_eq!(target["plugin"].as_array().unwrap().len(), 2);
+        assert_eq!(target["plugin"].as_array().unwrap().len(), 1);
         assert!(target["provider"]["openclaude"]["models"]["sonnet"].is_object());
+    }
+
+    #[test]
+    fn requested_model() {
+        let args = vec![
+            OsString::from("run"),
+            OsString::from("-m"),
+            OsString::from("openclaude/sonnet"),
+            OsString::from("hello"),
+        ];
+
+        let model = requested_model_from_args(&args, "openclaude").unwrap();
+
+        assert_eq!(model, ProviderModel::claude("sonnet", "Claude Sonnet"));
     }
 }
