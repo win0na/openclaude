@@ -27,3 +27,18 @@ impl ProviderModel {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn claude_constructor() {
+        let model = ProviderModel::claude("sonnet", "Claude Sonnet");
+        assert_eq!(model.id, "sonnet");
+        assert_eq!(model.display_name, "Claude Sonnet");
+        assert!(model.capabilities.reasoning);
+        assert!(model.capabilities.tool_calls);
+        assert!(model.capabilities.interleaved_reasoning);
+    }
+}

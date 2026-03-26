@@ -65,3 +65,66 @@ impl From<ProviderModel> for ServerModel {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::integration::{
+        AdapterSessionState, AdapterStep, BridgeMessage, BridgeMessagePart, BridgeRequest,
+        BridgeRole,
+    };
+
+    #[test]
+    fn command_roundtrip() {
+        let command = ServerCommand::Complete {
+            request_id: "req-1".into(),
+            request: ServerRequest {
+                conversation: BridgeRequest {
+                    model_id: "sonnet".into(),
+                    system_prompt: Some("system".into()),
+                    messages: vec![BridgeMessage {
+                        role: BridgeRole::User,
+                        parts: vec![BridgeMessagePart::Text {
+                            text: "hello".into(),
+                        }],
+                    }],
+                },
+            },
+        };
+
+        let json = serde_json::to_string(&command).unwrap();
+        let parsed: ServerCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, command);
+    }
+
+    #[test]
+    fn envelope_error_serializes_request_id() {
+        let envelope = ServerEnvelope::Error {
+            request_id: Some("req-2".into()),
+            message: "boom".into(),
+        };
+
+        let json = serde_json::to_value(&envelope).unwrap();
+        assert_eq!(json["kind"], "error");
+        assert_eq!(json["request_id"], "req-2");
+        assert_eq!(json["message"], "boom");
+    }
+
+    #[test]
+    fn success_envelope_roundtrip() {
+        let envelope = ServerEnvelope::Success {
+            request_id: "req-3".into(),
+            response: ServerResponse {
+                metadata: None,
+                step: AdapterStep {
+                    events: Vec::new(),
+                    state: AdapterSessionState::Ready,
+                },
+            },
+        };
+
+        let json = serde_json::to_string(&envelope).unwrap();
+        let parsed: ServerEnvelope = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, envelope);
+    }
+}

@@ -50,3 +50,107 @@ pub fn serve_stdio<R: ProviderRuntime + Clone, In: Read, Out: Write>(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::integration::{BridgeRequest, OpenCodeBridge};
+    use crate::provider::{
+        ProviderInfo, ProviderModel, ProviderRequest, ProviderRuntime, StreamPart,
+    };
+    use crate::server::ServerRequest;
+
+    #[derive(Clone)]
+    struct MockRuntime {
+        model: ProviderModel,
+    }
+
+    impl ProviderRuntime for MockRuntime {
+        fn info(&self) -> ProviderInfo {
+            ProviderInfo {
+                id: "mock".into(),
+                name: "Mock".into(),
+            }
+        }
+
+        fn models(&self) -> &[ProviderModel] {
+            std::slice::from_ref(&self.model)
+        }
+
+        fn stream(
+            &self,
+            _request: ProviderRequest,
+        ) -> anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<StreamPart>> + Send>> {
+            Ok(Box::new(std::iter::once(Ok(StreamPart::Finish {
+                reason: crate::provider::FinishReason::EndTurn,
+            }))))
+        }
+    }
+
+    fn service() -> OpenClaudeService<MockRuntime> {
+        let model = ProviderModel::claude("sonnet", "Claude Sonnet");
+        let runtime = MockRuntime {
+            model: model.clone(),
+        };
+        OpenClaudeService::new(OpenCodeBridge::new(runtime, vec![model]))
+    }
+
+    #[test]
+    fn skips_blank_lines() {
+        let input = b"\n\n{\"kind\":\"describe\",\"request_id\":\"req-1\"}\n";
+        let mut output = Vec::new();
+        serve_stdio(&mut service(), &input[..], &mut output).unwrap();
+
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text.lines().count(), 1);
+        assert!(text.contains("\"request_id\":\"req-1\""));
+    }
+
+    #[test]
+    fn invalid_json_returns_error_envelope() {
+        let input = b"{not-json}\n";
+        let mut output = Vec::new();
+        serve_stdio(&mut service(), &input[..], &mut output).unwrap();
+
+        let envelope: ServerEnvelope = serde_json::from_slice(&output).unwrap();
+        match envelope {
+            ServerEnvelope::Error {
+                request_id,
+                message,
+            } => {
+                assert!(request_id.is_none());
+                assert!(message.contains("invalid command"));
+            }
+            other => panic!("unexpected envelope: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn complete_failure_preserves_request_id() {
+        let request = ServerCommand::Complete {
+            request_id: "req-2".into(),
+            request: ServerRequest {
+                conversation: BridgeRequest {
+                    model_id: "unknown".into(),
+                    system_prompt: None,
+                    messages: Vec::new(),
+                },
+            },
+        };
+        let input = format!("{}\n", serde_json::to_string(&request).unwrap());
+        let mut output = Vec::new();
+        serve_stdio(&mut service(), input.as_bytes(), &mut output).unwrap();
+
+        let envelope: ServerEnvelope = serde_json::from_slice(&output).unwrap();
+        match envelope {
+            ServerEnvelope::Error {
+                request_id,
+                message,
+            } => {
+                assert_eq!(request_id.as_deref(), Some("req-2"));
+                assert!(message.contains("unknown model id"));
+            }
+            other => panic!("unexpected envelope: {other:?}"),
+        }
+    }
+}

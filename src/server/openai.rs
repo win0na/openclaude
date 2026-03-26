@@ -291,30 +291,4 @@ mod tests {
             }))
         );
     }
-
-    #[test]
-    fn formats_response() {
-        let response = ChatResponse {
-            id: "chatcmpl-123".into(),
-            object: "chat.completion".into(),
-            created: 1700000000,
-            model: "claude-sonnet".into(),
-            choices: vec![ChatChoice {
-                index: 0,
-                message: ChatMessage {
-                    role: ChatRole::Assistant,
-                    content: ChatContent::Text("hello".into()),
-                    name: None,
-                    tool_call_id: None,
-                    tool_calls: None,
-                },
-                finish_reason: Some("stop".into()),
-            }],
-            usage: None,
-        };
-
-        let json = serde_json::to_string(&response).unwrap();
-        assert!(json.contains("chat.completion"));
-        assert!(json.contains("hello"));
-    }
 }

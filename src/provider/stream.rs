@@ -56,3 +56,22 @@ pub struct ToolInputDeltaPart {
     pub id: String,
     pub delta: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stream_part_roundtrip() {
+        let part = StreamPart::ToolCall(ToolCallPart {
+            id: "id-1".into(),
+            tool_call_id: "call-1".into(),
+            tool_name: "Read".into(),
+            input: serde_json::json!({"file_path": "/tmp/a"}),
+        });
+
+        let json = serde_json::to_string(&part).unwrap();
+        let parsed: StreamPart = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, part);
+    }
+}
