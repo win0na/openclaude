@@ -183,8 +183,9 @@ fn to_bridge_request(request: &ChatRequest) -> Result<BridgeRequest, String> {
                 parts.extend(tool_calls.iter().map(|call| BridgeMessagePart::ToolCall {
                     call_id: call.id.clone(),
                     tool_name: call.function.name.clone(),
-                    input: serde_json::from_str(&call.function.arguments)
-                        .unwrap_or_else(|_| serde_json::json!({ "arguments": call.function.arguments })),
+                    input: serde_json::from_str(&call.function.arguments).unwrap_or_else(
+                        |_| serde_json::json!({ "arguments": call.function.arguments }),
+                    ),
                 }));
             }
 
@@ -382,7 +383,12 @@ impl StreamResponseState {
     fn push(&mut self, event: AdapterEvent) -> Vec<String> {
         match event {
             AdapterEvent::TextDelta { delta, .. } => {
-                vec![make_content_chunk(&self.id, self.created, &self.model, &delta)]
+                vec![make_content_chunk(
+                    &self.id,
+                    self.created,
+                    &self.model,
+                    &delta,
+                )]
             }
             AdapterEvent::ToolInputStart { id, tool_name } => {
                 self.saw_tool_call = true;
@@ -427,7 +433,12 @@ impl StreamResponseState {
                 } else {
                     &reason
                 };
-                vec![make_finish_chunk(&self.id, self.created, &self.model, mapped)]
+                vec![make_finish_chunk(
+                    &self.id,
+                    self.created,
+                    &self.model,
+                    mapped,
+                )]
             }
             _ => Vec::new(),
         }
@@ -596,22 +607,24 @@ mod tests {
             &self,
             _request: ProviderRequest,
         ) -> anyhow::Result<Box<dyn Iterator<Item = anyhow::Result<StreamPart>> + Send>> {
-            Ok(Box::new(vec![
-                Ok(StreamPart::TextStart {
-                    id: "part-0".into(),
-                }),
-                Ok(StreamPart::TextDelta(crate::provider::TextPart {
-                    id: "part-0".into(),
-                    delta: "hello".into(),
-                })),
-                Ok(StreamPart::TextEnd {
-                    id: "part-0".into(),
-                }),
-                Ok(StreamPart::Finish {
-                    reason: crate::provider::FinishReason::EndTurn,
-                }),
-            ]
-            .into_iter()))
+            Ok(Box::new(
+                vec![
+                    Ok(StreamPart::TextStart {
+                        id: "part-0".into(),
+                    }),
+                    Ok(StreamPart::TextDelta(crate::provider::TextPart {
+                        id: "part-0".into(),
+                        delta: "hello".into(),
+                    })),
+                    Ok(StreamPart::TextEnd {
+                        id: "part-0".into(),
+                    }),
+                    Ok(StreamPart::Finish {
+                        reason: crate::provider::FinishReason::EndTurn,
+                    }),
+                ]
+                .into_iter(),
+            ))
         }
     }
 
@@ -738,5 +751,4 @@ mod tests {
             } if call_id == "toolu_1" && tool_name.as_deref() == Some("bash") && output == "tool-pass"
         ));
     }
-
 }

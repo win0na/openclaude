@@ -3,11 +3,11 @@ use std::process::Command;
 
 #[test]
 fn latency_live() {
-    if env::var("OPENCLAUDE_RUN_BENCHMARK_TEST").ok().as_deref() != Some("1") {
+    if env::var("CLYDE_RUN_BENCHMARK_TEST").ok().as_deref() != Some("1") {
         return;
     }
 
-    let binary = env!("CARGO_BIN_EXE_openclaude");
+    let binary = env!("CARGO_BIN_EXE_clyde");
     let output = Command::new(binary)
         .arg("benchmark")
         .arg("--iterations")

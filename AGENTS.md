@@ -38,11 +38,11 @@ If the change affects OpenCode integration knowledge, update `docs/OPENCODE_REFE
 
 ## What This Is
 
-`openclaude` is a translation layer between OpenCode and Claude Code. It uses a bootstrap wrapper and a native translation backend so OpenCode can preserve its own tooling, orchestration, and rendering semantics while Claude Code remains the model-facing transport.
+`clyde` is a translation layer between OpenCode and Claude Code. It uses a bootstrap wrapper and a native translation backend so OpenCode can preserve its own tooling, orchestration, and rendering semantics while Claude Code remains the model-facing transport.
 
 The purpose of this project is to fit more cleanly within Anthropic's guidelines for model usage outside of Claude Code. This project is not an OpenAI-compatible shim; it is a provider-focused translation backend that should model OpenCode's native stream parts and session expectations as closely as possible.
 
-Current integration guidance indicates that provider routing should live in OpenCode configuration plus wrapper-managed bootstrap. Do not assume a custom plugin layer is required for `openclaude` integration.
+Current integration guidance indicates that provider routing should live in OpenCode configuration plus wrapper-managed bootstrap. Do not assume a custom plugin layer is required for `clyde` integration.
 
 ## Project Goals
 
@@ -85,13 +85,13 @@ rustup component add rust-analyzer
 ## Project Structure
 
 ```text
-openclaude/
+clyde/
 ├── Cargo.toml
 ├── AGENTS.md
 ├── docs/
 │   ├── CLAUDE_CODE_REFERENCE.md
 │   └── OPENCODE_REFERENCE.md
-├── opencode-reference/       # optional ignored OpenCode checkout created by `openclaude reference`
+├── opencode-reference/       # optional ignored OpenCode checkout created by `clyde reference`
 ├── README.md
 ├── src/
 │   ├── lib.rs                 # library entrypoint and public exports
@@ -136,7 +136,7 @@ openclaude/
 - When adding new command-specific help sections, match the existing help-page layout conventions instead of inventing a new visual pattern
 - Keep acronyms capitalized in both prose and terminal-facing strings
 - Preserve exact casing for language names, file formats, environment variables, code identifiers, and other literals that require it
-- Always write the project name as `openclaude`, not `OpenClaude`
+- Always write the project name as `clyde`, not `Clyde`
 
 ## OMO / Oh-My-Opencode
 
@@ -153,7 +153,7 @@ openclaude/
 - Treat `docs/CLAUDE_CODE_REFERENCE.md` and `docs/OPENCODE_REFERENCE.md` as the portable internal references for this repository
 - Do not rely on machine-specific paths like `~/claude/opencode` in project guidance
 - Prefer updating the tracked docs over depending on the optional checkout workflow
-- Use `openclaude reference` or `cargo run -- reference` only when a direct local code checkout is genuinely helpful
+- Use `clyde reference` or `cargo run -- reference` only when a direct local code checkout is genuinely helpful
 
 ## Current Integration Target
 

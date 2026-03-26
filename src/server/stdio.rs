@@ -1,10 +1,10 @@
 use crate::provider::ProviderRuntime;
-use crate::server::{OpenClaudeService, ServerCommand, ServerEnvelope};
+use crate::server::{ClydeService, ServerCommand, ServerEnvelope};
 use anyhow::Context;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 
 pub fn serve_stdio<R: ProviderRuntime + Clone, In: Read, Out: Write>(
-    service: &mut OpenClaudeService<R>,
+    service: &mut ClydeService<R>,
     input: In,
     output: Out,
 ) -> anyhow::Result<()> {
@@ -87,12 +87,12 @@ mod tests {
         }
     }
 
-    fn service() -> OpenClaudeService<MockRuntime> {
+    fn service() -> ClydeService<MockRuntime> {
         let model = ProviderModel::claude("sonnet", "Claude Sonnet");
         let runtime = MockRuntime {
             model: model.clone(),
         };
-        OpenClaudeService::new(OpenCodeBridge::new(runtime, vec![model]))
+        ClydeService::new(OpenCodeBridge::new(runtime, vec![model]))
     }
 
     #[test]

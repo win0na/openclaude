@@ -1,12 +1,12 @@
 # OpenCode Reference
 
-This file is the internal implementation reference for OpenCode behavior that matters to `openclaude`.
+This file is the internal implementation reference for OpenCode behavior that matters to `clyde`.
 
 It is intended to replace dependence on a full local `opencode-reference/` checkout for normal backend work.
 
 ## Purpose in This Project
 
-`openclaude` is a translation layer between OpenCode and Claude Code.
+`clyde` is a translation layer between OpenCode and Claude Code.
 
 This means OpenCode is the intended owner of:
 
@@ -17,7 +17,7 @@ This means OpenCode is the intended owner of:
 - memory and context
 - frontend rendering semantics
 
-`openclaude` should adapt to OpenCode, not replace OpenCode.
+`clyde` should adapt to OpenCode, not replace OpenCode.
 
 ## Key Architectural Conclusion
 
@@ -32,7 +32,7 @@ In practical terms:
 
 - config declares the provider endpoint/base URL
 - plugin handles auth, headers, params, and transforms
-- `openclaude` handles native transport translation
+- `clyde` handles native transport translation
 
 ## What Plugins Appear Able to Do
 
@@ -50,7 +50,7 @@ Relevant plugin capabilities and hook categories:
   - before execution
   - after execution
 
-These support a thin plugin frontend that forwards to `openclaude`.
+These support a thin plugin frontend that forwards to `clyde`.
 
 ## What Plugins Should Not Be Assumed to Do
 
@@ -68,7 +68,7 @@ Current guidance for this project is:
 
 OpenCode should remain the owner of canonical message history.
 
-For `openclaude`, this means:
+For `clyde`, this means:
 
 - requests should contain full history
 - backend should not require hidden continuation state
@@ -106,7 +106,7 @@ The backend should keep its event model aligned with those expectations.
 
 ## Project-Local Integration Guidance
 
-Current internal layering in `openclaude`:
+Current internal layering in `clyde`:
 
 - `provider/`
   - provider-facing types and stream parts
@@ -123,13 +123,13 @@ Expected eventual no-patch integration shape:
 
 1. OpenCode config points a provider at an external backend or shim.
 2. A thin plugin handles auth and request shaping.
-3. The plugin sends full history to `openclaude`.
-4. `openclaude` returns translated events.
+3. The plugin sends full history to `clyde`.
+4. `clyde` returns translated events.
 5. OpenCode keeps owning sessions, tool execution, and visible history.
 
 ## HTTP Server Protocol
 
-`openclaude` exposes an OpenAI-compatible HTTP API for integration with OpenCode.
+`clyde` exposes an OpenAI-compatible HTTP API for integration with OpenCode.
 
 ### Endpoints
 
@@ -199,11 +199,11 @@ Tool calls are returned in the OpenAI format:
 
 ## OpenCode Configuration
 
-To use `openclaude` as a provider in OpenCode:
+To use `clyde` as a provider in OpenCode:
 
 1. Start the HTTP server:
    ```bash
-   openclaude serve --host 127.0.0.1 --port 3000
+clyde serve --host 127.0.0.1 --port 3000
    ```
 
 2. Configure OpenCode to use the provider (in `opencode.json` or via environment):
@@ -242,23 +242,23 @@ Relevant files in the optional local checkout:
 - `opencode-reference/packages/opencode/src/provider/provider.ts`
 - `opencode-reference/packages/opencode/src/session/llm.ts`
 
-The practical implication is that `openclaude` should assume one of the following setup patterns rather than true plugin-driven provider registration.
+The practical implication is that `clyde` should assume one of the following setup patterns rather than true plugin-driven provider registration.
 
 ### Supported Setup Options
 
 #### Option 1: Wrapper-Managed Bootstrap Config
 
-`openclaude` can generate temporary bootstrap config for the launched `opencode` process without editing user files.
+`clyde` can generate temporary bootstrap config for the launched `opencode` process without editing user files.
 
 - best fit for the current no-patch goal
 - keeps the plugin thin at runtime
 - keeps the user's normal `opencode` command unchanged
 - uses `OPENCODE_CONFIG_CONTENT` so OpenCode merges the bootstrap entries with existing config for that process only
-- current implementation target is provider ID `openclaude` with model entries resolved at launch using this precedence: manual override (`OPENCLAUDE_AVAILABLE_MODELS` / `--available-models`) -> cached local discovery -> Claude CLI probing -> fallback `haiku`, `sonnet`, and `opus`, backed by `@ai-sdk/openai-compatible`
+- current implementation target is provider ID `clyde` with model entries resolved at launch using this precedence: manual override (`CLYDE_AVAILABLE_MODELS` / `--available-models`) -> cached local discovery -> Claude CLI probing -> fallback `haiku`, `sonnet`, and `opus`, backed by `@ai-sdk/openai-compatible`
 
 #### Option 2: Plugin-Managed Config Bootstrap
 
-The plugin can create or update the user's OpenCode config so the `openclaude` provider entry exists before chat starts.
+The plugin can create or update the user's OpenCode config so the `clyde` provider entry exists before chat starts.
 
 - still possible in principle
 - more invasive because it edits user config
@@ -284,8 +284,8 @@ OpenCode could eventually add a real plugin hook for provider registration.
 
 For the current repository, the best practical path is:
 
-1. Keep `openclaude serve` as the backend runtime entrypoint.
-2. Make bare `openclaude` launch `opencode` with temporary bootstrap config.
+1. Keep `clyde serve` as the backend runtime entrypoint.
+2. Make bare `clyde` launch `opencode` with temporary bootstrap config.
 3. Keep the plugin focused on auth, headers, params, and transforms.
 4. Avoid editing user config by default.
 5. Avoid designing around unsupported dynamic provider registration.

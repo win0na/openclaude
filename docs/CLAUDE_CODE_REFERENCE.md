@@ -1,12 +1,12 @@
 # Claude Code Reference
 
-This file is the internal implementation reference for Claude Code CLI behavior that matters to `openclaude`.
+This file is the internal implementation reference for Claude Code CLI behavior that matters to `clyde`.
 
 It exists so backend work can be grounded in stable project-local documentation instead of ad hoc memory or machine-specific source checkouts.
 
 ## Purpose in This Project
 
-`openclaude` treats Claude Code as the model-facing transport.
+`clyde` treats Claude Code as the model-facing transport.
 
 The backend should use Claude Code for:
 
@@ -26,7 +26,7 @@ The backend should not treat Claude Code as the canonical owner of:
 
 The current project uses the CLI in non-interactive print mode.
 
-Core flags used by `openclaude` today:
+Core flags used by `clyde` today:
 
 ```bash
 claude \
@@ -48,25 +48,25 @@ claude \
 - `--model`
   - selects Claude Code's target model
 
-`openclaude` may also issue short non-interactive Claude probes during launch to determine which model aliases are actually available in the local Claude environment.
+`clyde` may also issue short non-interactive Claude probes during launch to determine which model aliases are actually available in the local Claude environment.
 
 - precedence order is: manual override -> cached discovery -> live probe -> static fallback
-- manual override comes from `OPENCLAUDE_AVAILABLE_MODELS` / `--available-models`
-- cache defaults to `$XDG_CACHE_HOME/openclaude/models.json` or `~/.cache/openclaude/models.json`
-- `OPENCLAUDE_MODEL_CACHE` can override the cache file path
+- manual override comes from `CLYDE_AVAILABLE_MODELS` / `--available-models`
+- cache defaults to `$XDG_CACHE_HOME/clyde/models.json` or `~/.cache/clyde/models.json`
+- `CLYDE_MODEL_CACHE` can override the cache file path
 - current live probe targets are `haiku`, `sonnet`, and `opus`
 - successful probes become the OpenCode-visible model list
-- if all probes fail, `openclaude` falls back to the static alias set
+- if all probes fail, `clyde` falls back to the static alias set
 
 - `--permission-mode bypassPermissions`
   - disables Claude Code's interactive approval flow for this transport session
-  - `openclaude` relies on OpenCode-owned tool execution instead of Claude-local permission UX
+- `clyde` relies on OpenCode-owned tool execution instead of Claude-local permission UX
 - `--dangerously-skip-permissions`
   - ensures Claude does not narrate or wait on local permission prompts
   - this is intentional here because Claude Code is acting as a stateless transport, not the canonical tool runner
 - `--output-format stream-json`
   - newline-delimited JSON stream
-  - this is the most important mode for `openclaude`
+- this is the most important mode for `clyde`
 - `--verbose`
   - needed because the streamed event forms we care about appear in the verbose output path
 - `--include-partial-messages`
@@ -89,7 +89,7 @@ That means:
 
 ### Tool Use Is Emitted, Not Owned
 
-Claude Code can emit tool-use blocks, but in `openclaude` these should be translated into provider-like events and handed back to the frontend layer.
+Claude Code can emit tool-use blocks, but in `clyde` these should be translated into provider-like events and handed back to the frontend layer.
 
 The backend should not become the canonical owner of tool continuation state.
 
@@ -103,7 +103,7 @@ If a turn needs to continue after a tool result, the stateless target architectu
 
 This is less like restoring an internal Claude session and more like deterministic replay.
 
-## Stream-JSON Structures Relevant to openclaude
+## Stream-JSON Structures Relevant to clyde
 
 ### Top-Level Chunk Kinds
 
@@ -202,7 +202,7 @@ Modeled delta types:
 
 This matters because tool input often arrives incrementally and must be accumulated until `content_block_stop`.
 
-## Translation Rules Currently Assumed by openclaude
+## Translation Rules Currently Assumed by clyde
 
 ### Reasoning
 

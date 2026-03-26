@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -126,8 +126,8 @@ mod tests {
 
     #[test]
     fn path_root() {
-        let path = reference_path(Path::new("/tmp/openclaude"));
-        assert_eq!(path, PathBuf::from("/tmp/openclaude/opencode-reference"));
+        let path = reference_path(Path::new("/tmp/clyde"));
+        assert_eq!(path, PathBuf::from("/tmp/clyde/opencode-reference"));
     }
 
     #[test]

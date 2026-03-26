@@ -190,10 +190,11 @@ mod tests {
             mapped.state,
             AdapterSessionState::WaitingForTool(_)
         ));
-        assert!(mapped
-            .events
-            .iter()
-            .any(|event| matches!(event, AdapterEvent::ReasoningStart { id } if id == "part-r")));
+        assert!(
+            mapped.events.iter().any(
+                |event| matches!(event, AdapterEvent::ReasoningStart { id } if id == "part-r")
+            )
+        );
         assert!(mapped.events.iter().any(
             |event| matches!(event, AdapterEvent::ToolInputDelta { id, .. } if id == "toolu_1")
         ));

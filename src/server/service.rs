@@ -2,11 +2,11 @@ use crate::integration::OpenCodeBridge;
 use crate::provider::ProviderRuntime;
 use crate::server::{ServerMetadata, ServerModel, ServerRequest, ServerResponse};
 
-pub struct OpenClaudeService<R: ProviderRuntime + Clone> {
+pub struct ClydeService<R: ProviderRuntime + Clone> {
     template: OpenCodeBridge<R>,
 }
 
-impl<R: ProviderRuntime + Clone> OpenClaudeService<R> {
+impl<R: ProviderRuntime + Clone> ClydeService<R> {
     pub fn new(bridge: OpenCodeBridge<R>) -> Self {
         Self { template: bridge }
     }
@@ -94,7 +94,7 @@ mod tests {
             model: model.clone(),
         };
         let bridge = OpenCodeBridge::new(runtime, vec![model]);
-        let service = OpenClaudeService::new(bridge);
+        let service = ClydeService::new(bridge);
 
         let response = service.describe();
         let metadata = response.metadata.unwrap();

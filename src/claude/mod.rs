@@ -6,7 +6,7 @@ pub mod tool_name;
 pub mod translate;
 
 pub use cli::ClaudeCli;
-pub use prompt::{build_claude_prompt, ClaudePrompt};
+pub use prompt::{ClaudePrompt, build_claude_prompt};
 pub use runtime::ClaudeCliRuntime;
 pub use stream::{ClaudeChunk, ClaudeContentBlock, ClaudeStreamEvent};
 pub use translate::chunk_to_stream_parts;

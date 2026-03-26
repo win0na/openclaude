@@ -207,9 +207,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(step.state, AdapterSessionState::Finished);
-        assert!(step
-            .events
-            .iter()
-            .any(|event| matches!(event, AdapterEvent::Start)));
+        assert!(
+            step.events
+                .iter()
+                .any(|event| matches!(event, AdapterEvent::Start))
+        );
     }
 }

@@ -1,11 +1,11 @@
 use crate::claude::ClaudeCli;
 use crate::cli::Cli;
 use crate::exec::resolve_opencode_path;
-use crate::provider::catalog::default_model;
 use crate::provider::ProviderModel;
-use anyhow::{bail, Context};
+use crate::provider::catalog::default_model;
+use anyhow::{Context, bail};
 use reqwest::blocking::Client;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::env;
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader, Read};
@@ -40,8 +40,8 @@ pub fn run_opencode(cli: &Cli, args: &[OsString]) -> anyhow::Result<i32> {
     let opencode_bin = resolve_opencode_path(&cli.opencode_bin)?;
     let status = Command::new(&opencode_bin)
         .args(args)
-        .env("OPENCLAUDE_PROVIDER_ID", &cli.provider_id)
-        .env("OPENCLAUDE_BASE_URL", &cli.base_url)
+        .env("CLYDE_PROVIDER_ID", &cli.provider_id)
+        .env("CLYDE_BASE_URL", &cli.base_url)
         .env(
             "OPENCODE_CONFIG_CONTENT",
             serde_json::to_string(&bootstrap_config)?,
@@ -142,7 +142,7 @@ fn provider_base_url(base_url: &str) -> anyhow::Result<String> {
 fn ensure_server_port_available(host: &str, port: u16) -> anyhow::Result<()> {
     TcpListener::bind((host, port)).with_context(|| {
         format!(
-            "cannot start the bundled openclaude server because {host}:{port} is already in use; stop the existing process or run `openclaude bootstrap` to use an already-running server"
+            "cannot start the bundled clyde server because {host}:{port} is already in use; stop the existing process or run `clyde bootstrap` to use an already-running server"
         )
     })?;
     Ok(())
@@ -187,7 +187,7 @@ fn start_sidecar(cli: &Cli, target: &ServerTarget) -> anyhow::Result<ServerSidec
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .with_context(|| "failed to start bundled openclaude server".to_string())?;
+        .with_context(|| "failed to start bundled clyde server".to_string())?;
 
     let logs = Arc::new(Mutex::new(Vec::new()));
     spawn_logs(child.stdout.take().unwrap(), logs.clone());
@@ -223,7 +223,7 @@ fn wait_ready(sidecar: &ServerSidecar, target: &ServerTarget) -> anyhow::Result<
 
     let logs = sidecar.logs.lock().unwrap().join("\n");
     bail!(
-        "bundled openclaude server did not become ready at {}; logs:\n{}",
+        "bundled clyde server did not become ready at {}; logs:\n{}",
         target.health_url,
         logs
     )
@@ -288,7 +288,7 @@ fn existing_inline_config() -> anyhow::Result<Value> {
     };
 
     serde_json::from_str(&text.to_string_lossy()).context(
-        "openclaude cannot merge the existing OPENCODE_CONFIG_CONTENT because it is not valid JSON",
+        "clyde cannot merge the existing OPENCODE_CONFIG_CONTENT because it is not valid JSON",
     )
 }
 
@@ -310,7 +310,7 @@ fn bootstrap_patch(cli: &Cli, models: &[ProviderModel]) -> anyhow::Result<Value>
         cli.provider_id.clone(),
         json!({
             "npm": "@ai-sdk/openai-compatible",
-            "name": "openclaude",
+            "name": "clyde",
             "options": {
                 "baseURL": provider_base_url,
             },
@@ -357,13 +357,13 @@ mod tests {
         Cli {
             command: None,
             opencode_arguments: None,
-            provider_id: "openclaude".into(),
+            provider_id: "clyde".into(),
             default_model: "sonnet".into(),
             available_models: Vec::new(),
             claude_bin: "claude".into(),
             opencode_bin: "opencode".into(),
             base_url: "http://127.0.0.1:43123".into(),
-            workdir: "/tmp/openclaude".into(),
+            workdir: "/tmp/clyde".into(),
         }
     }
 
@@ -375,11 +375,11 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            value["provider"]["openclaude"]["options"]["baseURL"],
+            value["provider"]["clyde"]["options"]["baseURL"],
             "http://127.0.0.1:43123/v1"
         );
         assert!(value.get("plugin").is_none());
-        assert!(value["provider"]["openclaude"]["models"]["sonnet"].is_object());
+        assert!(value["provider"]["clyde"]["models"]["sonnet"].is_object());
     }
 
     #[test]
@@ -387,7 +387,7 @@ mod tests {
         let mut target = json!({
             "plugin": ["file:///existing.ts"],
             "provider": {
-                "openclaude": {
+                "clyde": {
                     "options": {
                         "baseURL": "http://custom"
                     }
@@ -403,11 +403,11 @@ mod tests {
         merge_missing(&mut target, patch);
 
         assert_eq!(
-            target["provider"]["openclaude"]["options"]["baseURL"],
+            target["provider"]["clyde"]["options"]["baseURL"],
             "http://custom"
         );
         assert_eq!(target["plugin"].as_array().unwrap().len(), 1);
-        assert!(target["provider"]["openclaude"]["models"]["sonnet"].is_object());
+        assert!(target["provider"]["clyde"]["models"]["sonnet"].is_object());
     }
 
     #[test]
@@ -415,11 +415,11 @@ mod tests {
         let args = vec![
             OsString::from("run"),
             OsString::from("-m"),
-            OsString::from("openclaude/sonnet"),
+            OsString::from("clyde/sonnet"),
             OsString::from("hello"),
         ];
 
-        let model = requested_model_from_args(&args, "openclaude").unwrap();
+        let model = requested_model_from_args(&args, "clyde").unwrap();
 
         assert_eq!(model, ProviderModel::claude("sonnet", "Claude Sonnet"));
     }
@@ -451,6 +451,6 @@ mod tests {
         cli.opencode_bin = std::env::current_exe().unwrap();
 
         let err = run_opencode(&cli, &[]).unwrap_err().to_string();
-        assert!(err.contains("points back to openclaude"));
+        assert!(err.contains("points back to clyde"));
     }
 }

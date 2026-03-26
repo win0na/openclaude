@@ -1,11 +1,11 @@
 use crate::exec;
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const START_MARKER: &str = "# >>> openclaude alias >>>";
-const END_MARKER: &str = "# <<< openclaude alias <<<";
+const START_MARKER: &str = "# >>> clyde alias >>>";
+const END_MARKER: &str = "# <<< clyde alias <<<";
 
 pub struct AliasInstall {
     pub shell: &'static str,
@@ -18,7 +18,7 @@ pub fn install() -> anyhow::Result<AliasInstall> {
     let existing = fs::read_to_string(&rc_path).unwrap_or_default();
     let updated = replace_managed_block(
         &existing,
-        &managed_block(shell, &exec::shell_command_for_openclaude()?),
+        &managed_block(shell, &exec::shell_command_for_clyde()?),
     );
     fs::write(&rc_path, updated)
         .with_context(|| format!("failed to update {}", rc_path.display()))?;
@@ -32,7 +32,7 @@ fn active_shell() -> anyhow::Result<&'static str> {
     } else if shell.ends_with("/bash") {
         Ok("bash")
     } else {
-        bail!("unsupported shell `{shell}` for openclaude alias installation")
+        bail!("unsupported shell `{shell}` for clyde alias installation")
     }
 }
 
@@ -45,12 +45,12 @@ fn rc_path(shell: &str) -> anyhow::Result<PathBuf> {
     }))
 }
 
-fn managed_block(shell: &str, openclaude_command: &str) -> String {
+fn managed_block(shell: &str, clyde_command: &str) -> String {
     let function = match shell {
         "zsh" | "bash" => {
             format!(
                 "opencode() {{\n  command {} -c \"$(printf '%q ' \"$@\")\"\n}}",
-                openclaude_command
+                clyde_command
             )
         }
         _ => unreachable!(),
@@ -79,10 +79,10 @@ mod tests {
 
     #[test]
     fn replaces_block() {
-        let existing = "first\n# >>> openclaude alias >>>\nold\n# <<< openclaude alias <<<\n";
+        let existing = "first\n# >>> clyde alias >>>\nold\n# <<< clyde alias <<<\n";
         let updated = replace_managed_block(
             existing,
-            "# >>> openclaude alias >>>\nnew\n# <<< openclaude alias <<<\n",
+            "# >>> clyde alias >>>\nnew\n# <<< clyde alias <<<\n",
         );
         assert!(updated.contains("first"));
         assert!(updated.contains("new"));
@@ -91,18 +91,18 @@ mod tests {
 
     #[test]
     fn zsh_block() {
-        let block = managed_block("zsh", "openclaude");
+        let block = managed_block("zsh", "clyde");
         assert!(block.contains(START_MARKER));
         assert!(block.contains("opencode()"));
         assert!(block.contains("printf '%q ' \"$@\""));
-        assert!(block.contains("command openclaude -c"));
+        assert!(block.contains("command clyde -c"));
         assert!(block.contains(END_MARKER));
     }
 
     #[test]
     fn absolute_block() {
-        let block = managed_block("bash", "'/tmp/openclaude'");
-        assert!(block.contains("command '/tmp/openclaude' -c"));
+        let block = managed_block("bash", "'/tmp/clyde'");
+        assert!(block.contains("command '/tmp/clyde' -c"));
         assert!(block.contains("printf '%q ' \"$@\""));
     }
 }

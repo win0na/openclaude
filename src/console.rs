@@ -1,5 +1,5 @@
 use std::env;
-use std::io::{stderr, stdout, IsTerminal};
+use std::io::{IsTerminal, stderr, stdout};
 
 #[derive(Clone, Copy)]
 pub struct Style {

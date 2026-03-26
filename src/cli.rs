@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Parser)]
 #[command(
-    name = "openclaude",
+    name = "clyde",
     disable_help_subcommand = true,
     disable_help_flag = true
 )]
@@ -22,7 +22,7 @@ pub struct Cli {
     )]
     pub opencode_arguments: Option<String>,
 
-    #[arg(long, default_value = "openclaude")]
+    #[arg(long, default_value = "clyde")]
     pub provider_id: String,
 
     #[arg(long, default_value = "sonnet")]
@@ -40,7 +40,7 @@ pub struct Cli {
     #[arg(long, default_value = "http://127.0.0.1:43123")]
     pub base_url: String,
 
-    #[arg(long, default_value = "/tmp/openclaude")]
+    #[arg(long, default_value = "/tmp/clyde")]
     pub workdir: PathBuf,
 }
 
@@ -179,22 +179,22 @@ fn render_help_entries(entries: &[HelpEntry]) -> Vec<String> {
 
 fn render_detailed_help(style: console::Style) -> String {
     let mut lines = vec![
-        style.title("openclaude"),
+        style.title("clyde"),
         String::new(),
         style.heading("usage:"),
-        format!("  {}", style.command("openclaude [OPTIONS] [COMMAND]")),
+        format!("  {}", style.command("clyde [OPTIONS] [COMMAND]")),
         String::new(),
         style.heading("example:"),
     ];
     lines.extend(render_help_entries(&[
         command_entry(
             style,
-            "openclaude",
+            "clyde",
             "default: start the server and launch opencode",
         ),
         command_entry(
             style,
-            "openclaude -c [COMMAND]",
+            "clyde -c [COMMAND]",
             "start the server and forward explicit opencode arguments",
         ),
     ]));
@@ -206,11 +206,7 @@ fn render_detailed_help(style: console::Style) -> String {
             "-c, --opencode-arguments <OPENCODE_ARGUMENTS>",
             "forward remaining arguments to opencode",
         ),
-        option_entry(
-            style,
-            "--provider-id <PROVIDER_ID>",
-            "[default: openclaude]",
-        ),
+        option_entry(style, "--provider-id <PROVIDER_ID>", "[default: clyde]"),
         option_entry(
             style,
             "--default-model <DEFAULT_MODEL>",
@@ -232,7 +228,7 @@ fn render_detailed_help(style: console::Style) -> String {
             "--base-url <BASE_URL>",
             "[default: http://127.0.0.1:43123]",
         ),
-        option_entry(style, "--workdir <WORKDIR>", "[default: /tmp/openclaude]"),
+        option_entry(style, "--workdir <WORKDIR>", "[default: /tmp/clyde]"),
         option_entry(style, "-h, --help", "print help"),
     ]));
     lines.push(String::new());
@@ -263,17 +259,17 @@ fn render_detailed_help(style: console::Style) -> String {
     lines.extend(render_help_entries(&[
         command_entry(
             style,
-            "openclaude bootstrap [COMMAND]",
+            "clyde bootstrap [COMMAND]",
             "launch opencode with provider bootstrap only",
         ),
         command_entry(
             style,
-            "openclaude reference [--project-root <PROJECT_ROOT>]",
+            "clyde reference [--project-root <PROJECT_ROOT>]",
             "refresh the optional local opencode checkout",
         ),
         command_entry(
             style,
-            "openclaude serve [--host <HOST>] [--port <PORT>]",
+            "clyde serve [--host <HOST>] [--port <PORT>]",
             "start the HTTP backend server",
         ),
     ]));
@@ -286,10 +282,10 @@ pub fn detailed_help() -> String {
 
 fn render_benchmark_help(style: console::Style) -> String {
     let mut lines = vec![
-        style.title("openclaude benchmark"),
+        style.title("clyde benchmark"),
         String::new(),
         style.heading("usage:"),
-        format!("  {}", style.command("openclaude benchmark [OPTIONS]")),
+        format!("  {}", style.command("clyde benchmark [OPTIONS]")),
         String::new(),
         style.heading("commands:"),
     ];
@@ -370,18 +366,18 @@ mod tests {
         assert!(help.contains("options:"));
         assert!(help.contains("commands:"));
         assert!(help.contains("subcommand usage:"));
-        assert!(help.contains("openclaude -c [COMMAND]"));
-        assert!(help.contains("openclaude bootstrap [COMMAND]"));
-        assert!(help.contains("openclaude serve [--host <HOST>] [--port <PORT>]"));
-        assert!(!help.contains("  openclaude alias                              install a shell alias for opencode passthrough"));
+        assert!(help.contains("clyde -c [COMMAND]"));
+        assert!(help.contains("clyde bootstrap [COMMAND]"));
+        assert!(help.contains("clyde serve [--host <HOST>] [--port <PORT>]"));
+        assert!(!help.contains("  clyde alias                              install a shell alias for opencode passthrough"));
     }
 
     #[test]
     fn help_benchmark() {
         let help = render_benchmark_help(console::Style::plain());
 
-        assert!(help.contains("openclaude benchmark"));
-        assert!(help.contains("openclaude benchmark [OPTIONS]"));
+        assert!(help.contains("clyde benchmark"));
+        assert!(help.contains("clyde benchmark [OPTIONS]"));
         assert!(help.contains("--mode <MODE>"));
         assert!(help.contains("possible values: all, translation, opencode-session"));
         assert!(help.contains("--model <MODEL>"));
@@ -390,34 +386,34 @@ mod tests {
 
     #[test]
     fn parses_help() {
-        let cli = Cli::try_parse_from(["openclaude", "help"]).expect("parse help");
+        let cli = Cli::try_parse_from(["clyde", "help"]).expect("parse help");
 
         assert!(matches!(cli.command, Some(Command::Help)));
     }
 
     #[test]
     fn routes_root_help_flag() {
-        let help = help_from_args(["openclaude", "--help"]).expect("root help");
+        let help = help_from_args(["clyde", "--help"]).expect("root help");
         assert!(help.contains("usage:"));
-        assert!(help.contains("openclaude bootstrap [COMMAND]"));
+        assert!(help.contains("clyde bootstrap [COMMAND]"));
     }
 
     #[test]
     fn routes_benchmark_help_flag() {
-        let help = help_from_args(["openclaude", "benchmark", "--help"]).expect("benchmark help");
-        assert!(help.contains("openclaude benchmark"));
+        let help = help_from_args(["clyde", "benchmark", "--help"]).expect("benchmark help");
+        assert!(help.contains("clyde benchmark"));
         assert!(help.contains("--mode <MODE>"));
     }
 
     #[test]
     fn ignores_passthrough_help_flag() {
-        assert!(help_from_args(["openclaude", "-c", "--help"]).is_none());
+        assert!(help_from_args(["clyde", "-c", "--help"]).is_none());
     }
 
     #[test]
     fn parses_bootstrap() {
-        let cli = Cli::try_parse_from(["openclaude", "bootstrap", "run", "hello"])
-            .expect("parse bootstrap");
+        let cli =
+            Cli::try_parse_from(["clyde", "bootstrap", "run", "hello"]).expect("parse bootstrap");
 
         match cli.command {
             Some(Command::Bootstrap { args }) => {
@@ -429,15 +425,15 @@ mod tests {
 
     #[test]
     fn parses_alias() {
-        let cli = Cli::try_parse_from(["openclaude", "alias"]).expect("parse alias");
+        let cli = Cli::try_parse_from(["clyde", "alias"]).expect("parse alias");
 
         assert!(matches!(cli.command, Some(Command::Alias)));
     }
 
     #[test]
     fn parses_opencode_arguments() {
-        let cli = Cli::try_parse_from(["openclaude", "-c", "run hello"])
-            .expect("parse opencode arguments");
+        let cli =
+            Cli::try_parse_from(["clyde", "-c", "run hello"]).expect("parse opencode arguments");
 
         assert!(cli.command.is_none());
         assert_eq!(cli.opencode_arguments, Some(String::from("run hello")));
@@ -445,17 +441,16 @@ mod tests {
 
     #[test]
     fn parses_empty_opencode_arguments() {
-        let cli =
-            Cli::try_parse_from(["openclaude", "-c"]).expect("parse empty opencode arguments");
+        let cli = Cli::try_parse_from(["clyde", "-c"]).expect("parse empty opencode arguments");
 
         assert!(cli.command.is_none());
         assert_eq!(cli.opencode_arguments, Some(String::new()));
     }
 
     #[test]
-    fn parses_quoted_opencode_arguments_before_openclaude_flags() {
+    fn parses_quoted_opencode_arguments_before_clyde_flags() {
         let cli = Cli::try_parse_from([
-            "openclaude",
+            "clyde",
             "-c",
             "--help --other-argument",
             "--provider-id",
@@ -472,7 +467,7 @@ mod tests {
 
     #[test]
     fn parses_benchmark() {
-        let cli = Cli::try_parse_from(["openclaude", "benchmark", "--iterations", "3"])
+        let cli = Cli::try_parse_from(["clyde", "benchmark", "--iterations", "3"])
             .expect("parse benchmark");
 
         match cli.command {
@@ -489,7 +484,7 @@ mod tests {
     #[test]
     fn parses_benchmark_help() {
         let cli =
-            Cli::try_parse_from(["openclaude", "benchmark", "help"]).expect("parse benchmark help");
+            Cli::try_parse_from(["clyde", "benchmark", "help"]).expect("parse benchmark help");
 
         match cli.command {
             Some(Command::Benchmark(cmd)) => {
@@ -501,7 +496,7 @@ mod tests {
 
     #[test]
     fn captures_external() {
-        let cli = Cli::try_parse_from(["openclaude", "run", "hello"]).expect("parse passthrough");
+        let cli = Cli::try_parse_from(["clyde", "run", "hello"]).expect("parse passthrough");
 
         match cli.command {
             Some(Command::External(args)) => {

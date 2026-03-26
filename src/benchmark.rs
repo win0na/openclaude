@@ -1,4 +1,4 @@
-use crate::claude::{build_claude_prompt, ClaudeCliRuntime};
+use crate::claude::{ClaudeCliRuntime, build_claude_prompt};
 use crate::cli::{BenchmarkMode, BenchmarkOptions, Cli};
 use crate::console;
 use crate::provider::{
@@ -6,7 +6,7 @@ use crate::provider::{
 };
 use reqwest::blocking::{Client, Response};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::path::PathBuf;
@@ -71,7 +71,7 @@ pub fn run(cli: &Cli, opts: &BenchmarkOptions) -> anyhow::Result<()> {
     let style = console::stdout_style();
     let modes = selected_modes(opts.mode);
 
-    println!("{}", style.title("openclaude benchmark"));
+    println!("{}", style.title("clyde benchmark"));
     println!();
     println!("{}", style.heading("config:"));
     println!(
@@ -372,7 +372,7 @@ fn bench_request_path(port: u16, opts: &BenchmarkOptions) -> anyhow::Result<Samp
             "stream": true,
         }))
         .send()?;
-    parse_stream(response, start, "openclaude request path")
+    parse_stream(response, start, "clyde request path")
 }
 
 fn parse_stream(response: Response, start: Instant, label: &str) -> anyhow::Result<Sample> {
@@ -447,7 +447,7 @@ fn bench_session_from(
         .arg("--format")
         .arg("json")
         .arg("-m")
-        .arg(format!("openclaude/{}", opts.model))
+        .arg(format!("clyde/{}", opts.model))
         .arg(&opts.prompt)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -498,11 +498,11 @@ fn bench_session_from(
     let status = child.wait()?;
     let stderr = stderr_handle.join().unwrap_or_default();
     if !status.success() {
-        anyhow::bail!("openclaude session failed with {status}: {stderr}");
+        anyhow::bail!("clyde session failed with {status}: {stderr}");
     }
 
     let first_ms =
-        first_ms.ok_or_else(|| anyhow::anyhow!("openclaude session produced no text event"))?;
+        first_ms.ok_or_else(|| anyhow::anyhow!("clyde session produced no text event"))?;
     let total_ms = finish_ms.unwrap_or_else(|| start.elapsed().as_secs_f64() * 1000.0);
     Ok(Sample { first_ms, total_ms })
 }
@@ -565,13 +565,13 @@ fn report(style: console::Style, label: &str, summary: &Summary) {
     );
 }
 
-fn report_overhead(style: console::Style, label: &str, claude: &Summary, openclaude: &Summary) {
+fn report_overhead(style: console::Style, label: &str, claude: &Summary, clyde: &Summary) {
     println!(
         "  {}  {} first avg = {:.1} ms, total avg = {:.1} ms",
         style.option("overhead"),
         label,
-        openclaude.avg_first_ms - claude.avg_first_ms,
-        openclaude.avg_total_ms - claude.avg_total_ms,
+        clyde.avg_first_ms - claude.avg_first_ms,
+        clyde.avg_total_ms - claude.avg_total_ms,
     );
 }
 
@@ -579,10 +579,10 @@ fn assert_thresholds(
     opts: &BenchmarkOptions,
     label: &str,
     claude: &Summary,
-    openclaude: &Summary,
+    clyde: &Summary,
 ) -> anyhow::Result<()> {
-    let first = openclaude.avg_first_ms - claude.avg_first_ms;
-    let total = openclaude.avg_total_ms - claude.avg_total_ms;
+    let first = clyde.avg_first_ms - claude.avg_first_ms;
+    let total = clyde.avg_total_ms - claude.avg_total_ms;
     if let Some(max) = opts.max_first_ms {
         anyhow::ensure!(
             first <= max,
@@ -810,7 +810,7 @@ mod tests {
             median_total_ms: 20.0,
             avg_total_ms: 20.0,
         };
-        let openclaude = Summary {
+        let clyde = Summary {
             min_first_ms: 20.0,
             median_first_ms: 20.0,
             avg_first_ms: 20.0,
@@ -819,7 +819,7 @@ mod tests {
             avg_total_ms: 30.0,
         };
 
-        let err = assert_thresholds(&opts, "translation", &claude, &openclaude)
+        let err = assert_thresholds(&opts, "translation", &claude, &clyde)
             .unwrap_err()
             .to_string();
         assert!(err.contains("translation first-content overhead"));

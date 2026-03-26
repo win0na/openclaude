@@ -1,15 +1,15 @@
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
-use openclaude::integration::{
-    AdapterEvent, AdapterSessionState, BridgeMessage, BridgeMessagePart, BridgeRequest,
-    BridgeRole, OpenCodeBridge,
+use clyde::integration::{
+    AdapterEvent, AdapterSessionState, BridgeMessage, BridgeMessagePart, BridgeRequest, BridgeRole,
+    OpenCodeBridge,
 };
-use openclaude::provider::{
+use clyde::provider::{
     FinishReason, ProviderInfo, ProviderModel, ProviderRequest, ProviderRuntime, StreamPart,
     ToolCallPart, ToolInputDeltaPart, ToolInputStartPart,
 };
-use openclaude::server::{
-    ChatRequest, ChatResponse, OpenClaudeService, ServerCommand, ServerRequest, create_router,
+use clyde::server::{
+    ChatRequest, ChatResponse, ClydeService, ServerCommand, ServerRequest, create_router,
     serve_stdio,
 };
 use tower::ServiceExt;
@@ -31,8 +31,7 @@ fn parses_basic() {
 
 #[test]
 fn parses_choice() {
-    let request: ChatRequest =
-        serde_json::from_str(&fixture("tool_choice_function.json")).unwrap();
+    let request: ChatRequest = serde_json::from_str(&fixture("tool_choice_function.json")).unwrap();
     assert_eq!(request.model, "opus");
     assert!(request.stream);
     assert!(request.tool_choice.is_some());
@@ -73,7 +72,7 @@ impl ProviderRuntime for TextRuntime {
                 Ok(StreamPart::TextStart {
                     id: "part-0".into(),
                 }),
-                Ok(StreamPart::TextDelta(openclaude::provider::TextPart {
+                Ok(StreamPart::TextDelta(clyde::provider::TextPart {
                     id: "part-0".into(),
                     delta: "hello".into(),
                 })),
@@ -198,7 +197,10 @@ async fn http_completion() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: ChatResponse = serde_json::from_slice(&body).unwrap();
-    assert_eq!(parsed.choices[0].message.content, openclaude::server::ChatContent::Text("hello".into()));
+    assert_eq!(
+        parsed.choices[0].message.content,
+        clyde::server::ChatContent::Text("hello".into())
+    );
     assert_eq!(parsed.choices[0].finish_reason.as_deref(), Some("stop"));
 }
 
@@ -246,7 +248,7 @@ fn service_history() {
         },
         vec![model],
     );
-    let mut service = OpenClaudeService::new(bridge);
+    let mut service = ClydeService::new(bridge);
 
     let first = service
         .complete(ServerRequest {
@@ -263,12 +265,17 @@ fn service_history() {
         })
         .unwrap();
 
-    assert!(matches!(first.step.state, AdapterSessionState::WaitingForTool(_)));
-    assert!(first
-        .step
-        .events
-        .iter()
-        .any(|event| matches!(event, AdapterEvent::ToolCall(_))));
+    assert!(matches!(
+        first.step.state,
+        AdapterSessionState::WaitingForTool(_)
+    ));
+    assert!(
+        first
+            .step
+            .events
+            .iter()
+            .any(|event| matches!(event, AdapterEvent::ToolCall(_)))
+    );
 }
 
 #[test]
@@ -280,7 +287,7 @@ fn stdio_complete() {
         },
         vec![model],
     );
-    let mut service = OpenClaudeService::new(bridge);
+    let mut service = ClydeService::new(bridge);
 
     let input = [
         serde_json::to_string(&ServerCommand::Describe {
@@ -289,7 +296,7 @@ fn stdio_complete() {
         .unwrap(),
         serde_json::to_string(&ServerCommand::Complete {
             request_id: "req-2".into(),
-            request: openclaude::server::ServerRequest {
+            request: clyde::server::ServerRequest {
                 conversation: BridgeRequest {
                     model_id: "sonnet".into(),
                     system_prompt: None,

@@ -1,4 +1,4 @@
-use crate::provider::{default_model, default_models, ProviderModel};
+use crate::provider::{ProviderModel, default_model, default_models};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -210,14 +210,14 @@ impl ClaudeCli {
 }
 
 fn default_cache_path() -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("OPENCLAUDE_MODEL_CACHE") {
+    if let Some(path) = std::env::var_os("CLYDE_MODEL_CACHE") {
         return Some(PathBuf::from(path));
     }
 
     std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
-        .map(|dir| dir.join("openclaude").join("models.json"))
+        .map(|dir| dir.join("clyde").join("models.json"))
 }
 
 fn now_unix_secs() -> u64 {

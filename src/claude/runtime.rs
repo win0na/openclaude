@@ -24,8 +24,8 @@ impl ClaudeCliRuntime {
     pub fn new(binary: impl Into<PathBuf>, models: Vec<ProviderModel>) -> Self {
         Self {
             info: ProviderInfo {
-                id: "openclaude".into(),
-                name: "openclaude".into(),
+                id: "clyde".into(),
+                name: "clyde".into(),
             },
             cli: ClaudeCli::new(binary),
             models,
@@ -227,9 +227,11 @@ mod tests {
             .unwrap();
 
         assert!(matches!(parts.first(), Some(StreamPart::Start)));
-        assert!(parts
-            .iter()
-            .any(|part| matches!(part, StreamPart::TextDelta(text) if text.delta == "hello")));
+        assert!(
+            parts
+                .iter()
+                .any(|part| matches!(part, StreamPart::TextDelta(text) if text.delta == "hello"))
+        );
         assert!(matches!(
             parts.last(),
             Some(StreamPart::Finish {

@@ -1,4 +1,4 @@
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
@@ -26,11 +26,11 @@ pub fn resolve_spawn_path(program: &Path) -> anyhow::Result<PathBuf> {
 
 pub fn resolve_opencode_path(program: &Path) -> anyhow::Result<PathBuf> {
     let resolved = resolve_spawn_path(program)?;
-    let openclaude = fs::canonicalize(std::env::current_exe()?)?;
+    let clyde = fs::canonicalize(std::env::current_exe()?)?;
     let candidate = fs::canonicalize(&resolved).unwrap_or(resolved.clone());
-    if candidate == openclaude {
+    if candidate == clyde {
         bail!(
-            "resolved opencode binary points back to openclaude ({}); pass --opencode-bin with the real opencode executable",
+            "resolved opencode binary points back to clyde ({}); pass --opencode-bin with the real opencode executable",
             resolved.display()
         );
     }
@@ -58,10 +58,10 @@ fn is_executable(path: &Path) -> bool {
     }
 }
 
-pub fn shell_command_for_openclaude() -> anyhow::Result<String> {
-    let name = OsStr::new("openclaude");
+pub fn shell_command_for_clyde() -> anyhow::Result<String> {
+    let name = OsStr::new("clyde");
     if find_in_path(name.to_string_lossy().as_ref()).is_some() {
-        return Ok(String::from("openclaude"));
+        return Ok(String::from("clyde"));
     }
 
     let current = std::env::current_exe()?;

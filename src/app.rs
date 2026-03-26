@@ -1,13 +1,13 @@
 use crate::alias;
-use crate::claude::{ClaudeCli, ClaudeCliRuntime};
-use crate::bootstrap::{launch_opencode, launch_opencode_with_server};
 use crate::benchmark;
+use crate::bootstrap::{launch_opencode, launch_opencode_with_server};
+use crate::claude::{ClaudeCli, ClaudeCliRuntime};
 use crate::cli::{BenchmarkCommand, Cli, Command};
-use crate::console;
 use crate::config::RuntimeConfig;
+use crate::console;
 use crate::integration::OpenCodeBridge;
 use crate::reference::refresh_reference;
-use crate::server::{OpenClaudeService, create_router, serve_stdio};
+use crate::server::{ClydeService, create_router, serve_stdio};
 use std::io::{self, Write};
 use std::net::SocketAddr;
 use tracing::{info, warn};
@@ -16,7 +16,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "openclaude=info".into()),
+                .unwrap_or_else(|_| "clyde=info".into()),
         )
         .with_ansi(console::stderr_color_enabled())
         .init();
@@ -53,11 +53,15 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             let install = alias::install()?;
             writeln!(
                 stdout,
-                "installed openclaude alias for {} in {}",
+                "installed clyde alias for {} in {}",
                 install.shell,
                 install.rc_path.display()
             )?;
-            writeln!(stdout, "restart your shell or run: source {}", install.rc_path.display())?;
+            writeln!(
+                stdout,
+                "restart your shell or run: source {}",
+                install.rc_path.display()
+            )?;
             Ok(())
         }
         Some(Command::Bootstrap { args }) => launch_opencode(&cli, args),
@@ -87,7 +91,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             info!(
                 runtime_models,
                 integration_mode = "http_server",
-                "openclaude initialized"
+                "clyde initialized"
             );
 
             let router = create_router(bridge);
@@ -120,12 +124,12 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             let runtime_models = models.len();
             let runtime = ClaudeCliRuntime::new(config.claude_bin.clone(), models.clone());
             let bridge = OpenCodeBridge::new(runtime, models);
-            let mut service = OpenClaudeService::new(bridge);
+            let mut service = ClydeService::new(bridge);
 
             info!(
                 runtime_models,
                 integration_mode = "standalone_bridge",
-                "openclaude initialized"
+                "clyde initialized"
             );
 
             serve_stdio(&mut service, std::io::stdin(), std::io::stdout())
@@ -138,8 +142,9 @@ fn parse_opencode_arguments(raw: &str) -> anyhow::Result<Vec<std::ffi::OsString>
         return Ok(Vec::new());
     }
 
-    let split = shlex::split(raw)
-        .ok_or_else(|| anyhow::anyhow!("failed to parse --opencode-arguments as shell arguments"))?;
+    let split = shlex::split(raw).ok_or_else(|| {
+        anyhow::anyhow!("failed to parse --opencode-arguments as shell arguments")
+    })?;
     Ok(split.into_iter().map(std::ffi::OsString::from).collect())
 }
 
@@ -150,15 +155,14 @@ mod tests {
 
     #[test]
     fn parses_shell_style_arguments() {
-        let args = parse_opencode_arguments("run --model 'openclaude/sonnet' \"hello world\"")
-            .unwrap();
+        let args = parse_opencode_arguments("run --model 'clyde/sonnet' \"hello world\"").unwrap();
 
         assert_eq!(
             args,
             vec![
                 OsString::from("run"),
                 OsString::from("--model"),
-                OsString::from("openclaude/sonnet"),
+                OsString::from("clyde/sonnet"),
                 OsString::from("hello world"),
             ]
         );
@@ -166,7 +170,9 @@ mod tests {
 
     #[test]
     fn rejects_invalid_shell_arguments() {
-        let err = parse_opencode_arguments("run 'unterminated").unwrap_err().to_string();
+        let err = parse_opencode_arguments("run 'unterminated")
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("failed to parse --opencode-arguments"));
     }
 }

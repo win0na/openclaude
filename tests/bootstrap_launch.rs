@@ -49,9 +49,9 @@ import json
 import os
 import urllib.request
 
-base = os.environ["OPENCLAUDE_BASE_URL"]
+base = os.environ["CLYDE_BASE_URL"]
 config = json.loads(os.environ["OPENCODE_CONFIG_CONTENT"])
-provider = config["provider"][os.environ["OPENCLAUDE_PROVIDER_ID"]]
+provider = config["provider"][os.environ["CLYDE_PROVIDER_ID"]]
 assert provider["options"]["baseURL"] == base + "/v1"
 urllib.request.urlopen(base + "/health", timeout=5).read()
 print("bootstrap-ok")
@@ -68,7 +68,7 @@ fn launch_combined() {
     let base_url = format!("http://127.0.0.1:{port}");
     let claude = fake_claude_script(temp.path());
     let opencode = fake_opencode_script(temp.path());
-    let binary = env!("CARGO_BIN_EXE_openclaude");
+    let binary = env!("CARGO_BIN_EXE_clyde");
 
     let output = Command::new(binary)
         .arg("--base-url")
@@ -95,7 +95,7 @@ fn launch_conflict() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let base_url = format!("http://127.0.0.1:{port}");
-    let binary = env!("CARGO_BIN_EXE_openclaude");
+    let binary = env!("CARGO_BIN_EXE_clyde");
 
     let output = Command::new(binary)
         .arg("--base-url")
