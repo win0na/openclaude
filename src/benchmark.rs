@@ -437,7 +437,7 @@ fn bench_session_from(
         .arg("--opencode-bin")
         .arg(&cli.opencode_bin)
         .arg("--base-url")
-        .arg(format!("http://127.0.0.1:{port}/v1"))
+        .arg(format!("http://127.0.0.1:{port}"))
         .arg("--available-models")
         .arg(&opts.model)
         .arg("--workdir")
@@ -769,4 +769,84 @@ fn sample_claude_request(
         })?,
         total_ms: finish_ms.unwrap_or_else(|| start.elapsed().as_secs_f64() * 1000.0),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::blocking::Client;
+    use std::net::TcpListener;
+    use std::thread;
+
+    #[test]
+    fn selects_all_modes() {
+        assert_eq!(
+            mode_names(&selected_modes(BenchmarkMode::All)),
+            vec!["translation", "opencode-session"]
+        );
+        assert_eq!(
+            mode_names(&selected_modes(BenchmarkMode::Translation)),
+            vec!["translation"]
+        );
+    }
+
+    #[test]
+    fn threshold_failure() {
+        let opts = BenchmarkOptions {
+            mode: BenchmarkMode::Translation,
+            model: "sonnet".into(),
+            prompt: "hi".into(),
+            iterations: 1,
+            warmups: 0,
+            skip_live: false,
+            max_first_ms: Some(5.0),
+            max_total_ms: Some(5.0),
+        };
+        let claude = Summary {
+            min_first_ms: 10.0,
+            median_first_ms: 10.0,
+            avg_first_ms: 10.0,
+            min_total_ms: 20.0,
+            median_total_ms: 20.0,
+            avg_total_ms: 20.0,
+        };
+        let openclaude = Summary {
+            min_first_ms: 20.0,
+            median_first_ms: 20.0,
+            avg_first_ms: 20.0,
+            min_total_ms: 30.0,
+            median_total_ms: 30.0,
+            avg_total_ms: 30.0,
+        };
+
+        let err = assert_thresholds(&opts, "translation", &claude, &openclaude)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("translation first-content overhead"));
+    }
+
+    #[test]
+    fn parse_stream_reports_first_content() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let body = concat!(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n",
+                "data: [DONE]\n\n"
+            );
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            )
+            .unwrap();
+        });
+
+        let response = Client::new().get(format!("http://{addr}")).send().unwrap();
+        let sample = parse_stream(response, Instant::now(), "label").unwrap();
+        assert!(sample.first_ms >= 0.0);
+        assert!(sample.total_ms >= sample.first_ms);
+    }
 }
