@@ -1,5 +1,6 @@
 use crate::claude::ClaudeCli;
 use crate::cli::Cli;
+use crate::exec::resolve_opencode_path;
 use crate::provider::catalog::default_model;
 use crate::provider::ProviderModel;
 use anyhow::{bail, Context};
@@ -26,7 +27,7 @@ pub fn launch_opencode_with_server(cli: &Cli, args: &[OsString]) -> anyhow::Resu
     let mut sidecar = start_sidecar(cli, &target)?;
     let result = (|| -> anyhow::Result<i32> {
         wait_ready(&sidecar, &target)?;
-        run_opencode(cli, args)
+        run_bootstrap_command(cli, args)
     })();
     stop_sidecar(&mut sidecar);
     let code = result?;
@@ -36,7 +37,8 @@ pub fn launch_opencode_with_server(cli: &Cli, args: &[OsString]) -> anyhow::Resu
 pub fn run_opencode(cli: &Cli, args: &[OsString]) -> anyhow::Result<i32> {
     let models = requested_models(cli, args);
     let bootstrap_config = merged_bootstrap_config(cli, &models)?;
-    let status = Command::new(&cli.opencode_bin)
+    let opencode_bin = resolve_opencode_path(&cli.opencode_bin)?;
+    let status = Command::new(&opencode_bin)
         .args(args)
         .env("OPENCLAUDE_PROVIDER_ID", &cli.provider_id)
         .env("OPENCLAUDE_BASE_URL", &cli.base_url)
@@ -48,11 +50,52 @@ pub fn run_opencode(cli: &Cli, args: &[OsString]) -> anyhow::Result<i32> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()
-        .with_context(|| format!("failed to launch {}", cli.opencode_bin.display()))?;
+        .with_context(|| format!("failed to launch {}", opencode_bin.display()))?;
 
     match status.code() {
         Some(code) => Ok(code),
         None => bail!("opencode process terminated without an exit code"),
+    }
+}
+
+fn run_bootstrap_command(cli: &Cli, args: &[OsString]) -> anyhow::Result<i32> {
+    let binary = std::env::current_exe()?;
+    let mut command = Command::new(binary);
+    command
+        .arg("--provider-id")
+        .arg(&cli.provider_id)
+        .arg("--default-model")
+        .arg(&cli.default_model)
+        .arg("--claude-bin")
+        .arg(&cli.claude_bin)
+        .arg("--opencode-bin")
+        .arg(&cli.opencode_bin)
+        .arg("--base-url")
+        .arg(&cli.base_url)
+        .arg("--workdir")
+        .arg(&cli.workdir);
+    if !cli.available_models.is_empty() {
+        command
+            .arg("--available-models")
+            .arg(cli.available_models.join(","));
+    }
+    let status = command
+        .arg("bootstrap")
+        .args(args)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .with_context(|| {
+            format!(
+                "failed to launch {} bootstrap",
+                command.get_program().to_string_lossy()
+            )
+        })?;
+
+    match status.code() {
+        Some(code) => Ok(code),
+        None => bail!("bootstrap process terminated without an exit code"),
     }
 }
 
@@ -82,6 +125,18 @@ fn server_target(base_url: &str) -> anyhow::Result<ServerTarget> {
         host,
         port,
     })
+}
+
+fn provider_base_url(base_url: &str) -> anyhow::Result<String> {
+    let mut url = reqwest::Url::parse(base_url)
+        .with_context(|| format!("invalid --base-url `{base_url}`"))?;
+    let path = url.path().trim_end_matches('/');
+    if path.is_empty() || path == "/" {
+        url.set_path("/v1");
+    } else if path != "/v1" {
+        url.set_path(&format!("{path}/v1"));
+    }
+    Ok(url.to_string().trim_end_matches('/').to_string())
 }
 
 fn ensure_server_port_available(host: &str, port: u16) -> anyhow::Result<()> {
@@ -238,6 +293,7 @@ fn existing_inline_config() -> anyhow::Result<Value> {
 }
 
 fn bootstrap_patch(cli: &Cli, models: &[ProviderModel]) -> anyhow::Result<Value> {
+    let provider_base_url = provider_base_url(&cli.base_url)?;
     let mut model_map = Map::new();
     for model in models {
         model_map.insert(
@@ -256,7 +312,7 @@ fn bootstrap_patch(cli: &Cli, models: &[ProviderModel]) -> anyhow::Result<Value>
             "npm": "@ai-sdk/openai-compatible",
             "name": "openclaude",
             "options": {
-                "baseURL": cli.base_url,
+                "baseURL": provider_base_url,
             },
             "models": model_map,
         }),
@@ -300,12 +356,13 @@ mod tests {
     fn test_cli() -> Cli {
         Cli {
             command: None,
+            opencode_arguments: None,
             provider_id: "openclaude".into(),
             default_model: "sonnet".into(),
             available_models: Vec::new(),
             claude_bin: "claude".into(),
             opencode_bin: "opencode".into(),
-            base_url: "http://127.0.0.1:43123/v1".into(),
+            base_url: "http://127.0.0.1:43123".into(),
             workdir: "/tmp/openclaude".into(),
         }
     }
@@ -369,10 +426,31 @@ mod tests {
 
     #[test]
     fn server_url() {
-        let target = server_target("http://127.0.0.1:43123/v1").unwrap();
+        let target = server_target("http://127.0.0.1:43123").unwrap();
 
         assert_eq!(target.host, "127.0.0.1");
         assert_eq!(target.port, 43123);
         assert_eq!(target.health_url, "http://127.0.0.1:43123/health");
+    }
+
+    #[test]
+    fn provider_url() {
+        assert_eq!(
+            provider_base_url("http://127.0.0.1:43123").unwrap(),
+            "http://127.0.0.1:43123/v1"
+        );
+        assert_eq!(
+            provider_base_url("http://127.0.0.1:43123/v1").unwrap(),
+            "http://127.0.0.1:43123/v1"
+        );
+    }
+
+    #[test]
+    fn rejects_recursive_opencode() {
+        let mut cli = test_cli();
+        cli.opencode_bin = std::env::current_exe().unwrap();
+
+        let err = run_opencode(&cli, &[]).unwrap_err().to_string();
+        assert!(err.contains("points back to openclaude"));
     }
 }

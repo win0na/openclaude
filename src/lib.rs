@@ -1,6 +1,8 @@
+pub mod alias;
 pub mod app;
 pub mod benchmark;
 pub mod bootstrap;
+pub mod exec;
 pub mod claude;
 pub mod cli;
 pub mod console;

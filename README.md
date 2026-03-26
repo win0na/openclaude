@@ -118,13 +118,17 @@ cargo test
 cargo build
 cargo run -- help
 cargo run --
+cargo run -- -c run hello
+cargo run -- alias
 cargo run -- bootstrap
 cargo run -- serve
 ```
 
 Bare `openclaude` now starts the local OpenClaude HTTP server in the background and then launches OpenCode against it. Use `openclaude bootstrap` to launch the bootstrap/client path without starting the server, and `openclaude serve` to run only the provider server.
 
-The default local server URL is `http://127.0.0.1:43123/v1`.
+Use `openclaude -c ...` to forward explicit OpenCode arguments through the default bundled-launch flow. Use `openclaude alias` to install a shell-level `opencode` wrapper for your active shell that forwards to `openclaude -c "$@"`.
+
+The default local server URL is `http://127.0.0.1:43123`. OpenClaude automatically uses the provider API under `/v1` internally.
 
 ## Claude CLI Requirements
 

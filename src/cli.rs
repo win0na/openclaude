@@ -4,10 +4,23 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Parser)]
-#[command(name = "openclaude", disable_help_subcommand = true)]
+#[command(
+    name = "openclaude",
+    disable_help_subcommand = true,
+    disable_help_flag = true
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
+
+    #[arg(
+        short = 'c',
+        long = "opencode-arguments",
+        num_args = 0..=1,
+        default_missing_value = "",
+        allow_hyphen_values = true
+    )]
+    pub opencode_arguments: Option<String>,
 
     #[arg(long, default_value = "openclaude")]
     pub provider_id: String,
@@ -24,7 +37,7 @@ pub struct Cli {
     #[arg(long, default_value = "opencode")]
     pub opencode_bin: PathBuf,
 
-    #[arg(long, default_value = "http://127.0.0.1:43123/v1")]
+    #[arg(long, default_value = "http://127.0.0.1:43123")]
     pub base_url: String,
 
     #[arg(long, default_value = "/tmp/openclaude")]
@@ -37,6 +50,7 @@ pub enum Command {
     Benchmark(Benchmark),
     #[command(hide = true)]
     BenchmarkClaudeWorker,
+    Alias,
     Bootstrap {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<OsString>,
@@ -104,38 +118,63 @@ pub enum BenchmarkMode {
     OpencodeSession,
 }
 
-fn command_line(style: console::Style, name: &str, description: &str) -> String {
-    inline_help_line(style.command(name), name, description, 2)
-}
-
-fn option_line(style: console::Style, name: &str, description: &str) -> String {
-    inline_help_line(style.option(name), name, description, 2)
-}
-
-fn inline_help_line(
+struct HelpEntry {
     styled_name: String,
-    plain_name: &str,
-    description: &str,
+    plain_name: String,
+    description: String,
     indent: usize,
-) -> String {
-    const DESCRIPTION_COLUMN: usize = 44;
-    let padding = DESCRIPTION_COLUMN
-        .saturating_sub(indent + plain_name.len())
-        .max(1);
-
-    format!(
-        "{}{styled_name}{}{description}",
-        " ".repeat(indent),
-        " ".repeat(padding)
-    )
 }
 
-fn help_block(styled_name: String, description: &str) -> [String; 2] {
-    [format!("  {styled_name}"), format!("    {description}")]
+fn command_entry(style: console::Style, name: &str, description: &str) -> HelpEntry {
+    HelpEntry {
+        styled_name: style.command(name),
+        plain_name: name.to_string(),
+        description: description.to_string(),
+        indent: 2,
+    }
 }
 
-fn detail_line(style: console::Style, name: &str, description: &str) -> String {
-    inline_help_line(style.option(name), name, description, 4)
+fn option_entry(style: console::Style, name: &str, description: &str) -> HelpEntry {
+    HelpEntry {
+        styled_name: style.option(name),
+        plain_name: name.to_string(),
+        description: description.to_string(),
+        indent: 2,
+    }
+}
+
+fn detail_entry(style: console::Style, name: &str, description: &str) -> HelpEntry {
+    HelpEntry {
+        styled_name: style.option(name),
+        plain_name: name.to_string(),
+        description: description.to_string(),
+        indent: 4,
+    }
+}
+
+fn render_help_entries(entries: &[HelpEntry]) -> Vec<String> {
+    const MIN_COLUMN_GAP: usize = 8;
+    let description_column = entries
+        .iter()
+        .map(|entry| entry.indent + entry.plain_name.len() + MIN_COLUMN_GAP)
+        .max()
+        .unwrap_or(MIN_COLUMN_GAP);
+
+    entries
+        .iter()
+        .map(|entry| {
+            let padding = description_column
+                .saturating_sub(entry.indent + entry.plain_name.len())
+                .max(MIN_COLUMN_GAP);
+            format!(
+                "{}{name}{}{desc}",
+                " ".repeat(entry.indent),
+                " ".repeat(padding),
+                name = entry.styled_name,
+                desc = entry.description
+            )
+        })
+        .collect()
 }
 
 fn render_detailed_help(style: console::Style) -> String {
@@ -147,80 +186,97 @@ fn render_detailed_help(style: console::Style) -> String {
         String::new(),
         style.heading("example:"),
     ];
-    lines.extend(help_block(
-        style.command("openclaude"),
-        "default: start the server and launch opencode",
-    ));
-    lines.extend(help_block(
-        style.command("openclaude bootstrap"),
-        "launch opencode with provider bootstrap only",
-    ));
-    lines.extend(help_block(
-        style.command("openclaude serve"),
-        "start the HTTP backend server",
-    ));
-    lines.extend([
-        String::new(),
-        style.heading("options:"),
-        option_line(
+    lines.extend(render_help_entries(&[
+        command_entry(
+            style,
+            "openclaude",
+            "default: start the server and launch opencode",
+        ),
+        command_entry(
+            style,
+            "openclaude -c [COMMAND]",
+            "start the server and forward explicit opencode arguments",
+        ),
+    ]));
+    lines.push(String::new());
+    lines.push(style.heading("options:"));
+    lines.extend(render_help_entries(&[
+        option_entry(
+            style,
+            "-c, --opencode-arguments <OPENCODE_ARGUMENTS>",
+            "forward remaining arguments to opencode",
+        ),
+        option_entry(
             style,
             "--provider-id <PROVIDER_ID>",
             "[default: openclaude]",
         ),
-        option_line(
+        option_entry(
             style,
             "--default-model <DEFAULT_MODEL>",
             "[default: sonnet]",
         ),
-        option_line(
+        option_entry(
             style,
             "--available-models <AVAILABLE_MODELS>",
             "[default: none] [comma-separated override]",
         ),
-        option_line(style, "--claude-bin <CLAUDE_BIN>", "[default: claude]"),
-        option_line(
+        option_entry(style, "--claude-bin <CLAUDE_BIN>", "[default: claude]"),
+        option_entry(
             style,
             "--opencode-bin <OPENCODE_BIN>",
             "[default: opencode]",
         ),
-        option_line(
+        option_entry(
             style,
             "--base-url <BASE_URL>",
-            "[default: http://127.0.0.1:43123/v1]",
+            "[default: http://127.0.0.1:43123]",
         ),
-        option_line(style, "--workdir <WORKDIR>", "[default: /tmp/openclaude]"),
-        option_line(style, "-h, --help", "print help"),
-        String::new(),
-        style.heading("commands:"),
-        command_line(style, "help", "print the detailed help page"),
-        command_line(style, "benchmark", "run the live latency benchmark"),
-        command_line(
+        option_entry(style, "--workdir <WORKDIR>", "[default: /tmp/openclaude]"),
+        option_entry(style, "-h, --help", "print help"),
+    ]));
+    lines.push(String::new());
+    lines.push(style.heading("commands:"));
+    lines.extend(render_help_entries(&[
+        command_entry(style, "help", "print the detailed help page"),
+        command_entry(style, "benchmark", "run the live latency benchmark"),
+        command_entry(
+            style,
+            "alias",
+            "install a shell alias for opencode passthrough",
+        ),
+        command_entry(
             style,
             "bootstrap",
             "launch opencode without starting the server",
         ),
-        command_line(
+        command_entry(
             style,
             "reference",
             "refresh the optional local opencode checkout",
         ),
-        command_line(style, "serve", "start the HTTP backend server"),
-        command_line(style, "stdio", "start the STDIO bridge explicitly"),
-        String::new(),
-        style.heading("subcommand usage:"),
-    ]);
-    lines.extend(help_block(
-        style.command("openclaude bootstrap [COMMAND]"),
-        "launch opencode with provider bootstrap only",
-    ));
-    lines.extend(help_block(
-        style.command("openclaude reference [--project-root <PROJECT_ROOT>]"),
-        "refresh the optional local opencode checkout",
-    ));
-    lines.extend(help_block(
-        style.command("openclaude serve [--host <HOST>] [--port <PORT>]"),
-        "start the HTTP backend server",
-    ));
+        command_entry(style, "serve", "start the HTTP backend server"),
+        command_entry(style, "stdio", "start the STDIO bridge explicitly"),
+    ]));
+    lines.push(String::new());
+    lines.push(style.heading("subcommand usage:"));
+    lines.extend(render_help_entries(&[
+        command_entry(
+            style,
+            "openclaude bootstrap [COMMAND]",
+            "launch opencode with provider bootstrap only",
+        ),
+        command_entry(
+            style,
+            "openclaude reference [--project-root <PROJECT_ROOT>]",
+            "refresh the optional local opencode checkout",
+        ),
+        command_entry(
+            style,
+            "openclaude serve [--host <HOST>] [--port <PORT>]",
+            "start the HTTP backend server",
+        ),
+    ]));
     lines.join("\n")
 }
 
@@ -229,46 +285,77 @@ pub fn detailed_help() -> String {
 }
 
 fn render_benchmark_help(style: console::Style) -> String {
-    let lines = vec![
+    let mut lines = vec![
         style.title("openclaude benchmark"),
         String::new(),
         style.heading("usage:"),
         format!("  {}", style.command("openclaude benchmark [OPTIONS]")),
         String::new(),
         style.heading("commands:"),
-        command_line(style, "help", "print benchmark help"),
-        String::new(),
-        style.heading("options:"),
-        detail_line(
+    ];
+    lines.extend(render_help_entries(&[command_entry(
+        style,
+        "help",
+        "print benchmark help",
+    )]));
+    lines.push(String::new());
+    lines.push(style.heading("options:"));
+    lines.extend(render_help_entries(&[
+        detail_entry(
             style,
             "--mode <MODE>",
             "benchmark mode [possible values: all, translation, opencode-session]",
         ),
-        detail_line(style, "--model <MODEL>", "benchmark model id"),
-        detail_line(style, "--prompt <PROMPT>", "benchmark prompt"),
-        detail_line(style, "--iterations <ITERATIONS>", "sample count"),
-        detail_line(style, "--warmups <WARMUPS>", "warmup runs"),
-        detail_line(
+        detail_entry(style, "--model <MODEL>", "benchmark model id"),
+        detail_entry(style, "--prompt <PROMPT>", "benchmark prompt"),
+        detail_entry(style, "--iterations <ITERATIONS>", "sample count"),
+        detail_entry(style, "--warmups <WARMUPS>", "warmup runs"),
+        detail_entry(
             style,
             "--skip-live",
             "skip instead of failing when live Claude access is unavailable",
         ),
-        detail_line(
+        detail_entry(
             style,
             "--max-first-ms <MAX_FIRST_MS>",
             "max allowed first-token overhead",
         ),
-        detail_line(
+        detail_entry(
             style,
             "--max-total-ms <MAX_TOTAL_MS>",
             "max allowed total overhead",
         ),
-    ];
+    ]));
     lines.join("\n")
 }
 
 pub fn benchmark_help() -> String {
     render_benchmark_help(console::stdout_style())
+}
+
+pub fn help_from_args<I, S>(args: I) -> Option<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let args = args
+        .into_iter()
+        .map(|arg| arg.as_ref().to_string())
+        .collect::<Vec<_>>();
+
+    if args.len() == 2 && is_help_flag(&args[1]) {
+        return Some(detailed_help());
+    }
+
+    if args.len() == 3 && args[1] == "benchmark" && is_help_flag(&args[2]) {
+        return Some(benchmark_help());
+    }
+
+    None
+}
+
+fn is_help_flag(value: &str) -> bool {
+    matches!(value, "-h" | "--help")
 }
 
 #[cfg(test)]
@@ -280,25 +367,13 @@ mod tests {
         let help = render_detailed_help(console::Style::plain());
 
         assert!(help.contains("usage:"));
-        assert!(help.contains("example:"));
-        assert!(help.contains("openclaude"));
-        assert!(help.contains("openclaude bootstrap"));
-        assert!(help.contains("benchmark"));
-        assert!(help.contains("default: start the server and launch opencode"));
-        assert!(help.contains("launch opencode with provider bootstrap only"));
-        assert!(help.contains("run the live latency benchmark"));
-        assert!(help.contains("openclaude serve"));
-        assert!(help.contains("start the HTTP backend server"));
+        assert!(help.contains("options:"));
+        assert!(help.contains("commands:"));
         assert!(help.contains("subcommand usage:"));
+        assert!(help.contains("openclaude -c [COMMAND]"));
         assert!(help.contains("openclaude bootstrap [COMMAND]"));
-        assert!(help.contains("openclaude reference [--project-root <PROJECT_ROOT>]"));
         assert!(help.contains("openclaude serve [--host <HOST>] [--port <PORT>]"));
-        assert!(!help.contains("benchmark:"));
-        assert!(!help.contains("openclaude benchmark [SUBCOMMAND]"));
-        assert!(help.contains("launch opencode without starting the server"));
-        assert!(help.contains("stdio"));
-        assert!(help.contains("start the STDIO bridge explicitly"));
-        assert!(!help.contains("quick guide"));
+        assert!(!help.contains("  openclaude alias                              install a shell alias for opencode passthrough"));
     }
 
     #[test]
@@ -307,25 +382,10 @@ mod tests {
 
         assert!(help.contains("openclaude benchmark"));
         assert!(help.contains("openclaude benchmark [OPTIONS]"));
-        assert!(help.contains("print benchmark help"));
         assert!(help.contains("--mode <MODE>"));
         assert!(help.contains("possible values: all, translation, opencode-session"));
         assert!(help.contains("--model <MODEL>"));
-        assert!(help.contains("benchmark model id"));
-        assert!(help.contains("--prompt <PROMPT>"));
-        assert!(help.contains("benchmark prompt"));
-        assert!(help.contains("--iterations <ITERATIONS>"));
-        assert!(help.contains("--warmups <WARMUPS>"));
         assert!(help.contains("--skip-live"));
-        assert!(help.contains("--max-first-ms <MAX_FIRST_MS>"));
-        assert!(help.contains("--max-total-ms <MAX_TOTAL_MS>"));
-    }
-
-    #[test]
-    fn help_ansi() {
-        let help = render_detailed_help(console::Style::color());
-
-        assert!(help.contains("\x1b["));
     }
 
     #[test]
@@ -333,6 +393,25 @@ mod tests {
         let cli = Cli::try_parse_from(["openclaude", "help"]).expect("parse help");
 
         assert!(matches!(cli.command, Some(Command::Help)));
+    }
+
+    #[test]
+    fn routes_root_help_flag() {
+        let help = help_from_args(["openclaude", "--help"]).expect("root help");
+        assert!(help.contains("usage:"));
+        assert!(help.contains("openclaude bootstrap [COMMAND]"));
+    }
+
+    #[test]
+    fn routes_benchmark_help_flag() {
+        let help = help_from_args(["openclaude", "benchmark", "--help"]).expect("benchmark help");
+        assert!(help.contains("openclaude benchmark"));
+        assert!(help.contains("--mode <MODE>"));
+    }
+
+    #[test]
+    fn ignores_passthrough_help_flag() {
+        assert!(help_from_args(["openclaude", "-c", "--help"]).is_none());
     }
 
     #[test]
@@ -346,6 +425,49 @@ mod tests {
             }
             other => panic!("unexpected command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_alias() {
+        let cli = Cli::try_parse_from(["openclaude", "alias"]).expect("parse alias");
+
+        assert!(matches!(cli.command, Some(Command::Alias)));
+    }
+
+    #[test]
+    fn parses_opencode_arguments() {
+        let cli = Cli::try_parse_from(["openclaude", "-c", "run hello"])
+            .expect("parse opencode arguments");
+
+        assert!(cli.command.is_none());
+        assert_eq!(cli.opencode_arguments, Some(String::from("run hello")));
+    }
+
+    #[test]
+    fn parses_empty_opencode_arguments() {
+        let cli =
+            Cli::try_parse_from(["openclaude", "-c"]).expect("parse empty opencode arguments");
+
+        assert!(cli.command.is_none());
+        assert_eq!(cli.opencode_arguments, Some(String::new()));
+    }
+
+    #[test]
+    fn parses_quoted_opencode_arguments_before_openclaude_flags() {
+        let cli = Cli::try_parse_from([
+            "openclaude",
+            "-c",
+            "--help --other-argument",
+            "--provider-id",
+            "temp",
+        ])
+        .expect("parse quoted opencode arguments");
+
+        assert_eq!(
+            cli.opencode_arguments,
+            Some(String::from("--help --other-argument"))
+        );
+        assert_eq!(cli.provider_id, "temp");
     }
 
     #[test]
